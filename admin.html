@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Command Center — SafePateros</title>
+    <style>
+      html.auth-pending body {
+        visibility: hidden;
+      }
+    </style>
+    <script>
+      document.documentElement.classList.add("auth-pending");
+    </script>
+
+    <!-- Apply saved theme before the page renders -->
+    <script>
+      (() => {
+        const savedTheme = localStorage.getItem("safepateros-theme");
+        const prefersDark = window.matchMedia(
+          "(prefers-color-scheme: dark)"
+        ).matches;
+        const useDark = savedTheme ? savedTheme === "dark" : prefersDark;
+        document.documentElement.classList.toggle("dark", useDark);
+      })();
+    </script>
+
+    <!-- Tailwind (CDN is for prototyping; compile it for production) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://api.mapbox.com/mapbox-gl-js/v3.16.0/mapbox-gl.css"
+    />
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.16.0/mapbox-gl.js"></script>
+
+    <!-- Your styles -->
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body class="min-h-screen flex">
+    <!-- ============ MOBILE OVERLAY ============ -->
+    <div
+      id="mobile-overlay"
+      class="hidden fixed inset-0 bg-black/60 z-40 lg:hidden"
+      data-action="toggle-sidebar"
+    ></div>
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside id="sidebar" class="flex flex-col" aria-label="Main navigation">
+      <div class="h-20 flex items-center px-6 border-b line shrink-0">
+        <div
+          class="flex items-center gap-3 font-bold text-xl tracking-tight t-main"
+        >
+          <div
+            class="w-8 h-8 rounded flex items-center justify-center border"
+            style="
+              background: var(--danger-bg);
+              border-color: var(--danger-line);
+            "
+            aria-hidden="true"
+          >
+            <i data-lucide="shield" class="w-5 h-5 t-danger"></i>
+          </div>
+          <span>SafePateros</span>
+        </div>
+        <button
+          data-action="toggle-sidebar"
+          class="lg:hidden ml-auto icon-btn"
+          aria-label="Close menu"
+        >
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <nav class="flex-1 px-4 py-6 space-y-7 overflow-y-auto">
+        <ul class="space-y-1">
+          <li>
+            <a href="#/dashboard" class="nav-link" data-nav="dashboard">
+              <i data-lucide="layout-dashboard" class="w-4 h-4"></i
+              ><span>Dashboard</span>
+            </a>
+          </li>
+          <li>
+            <a href="#/map" class="nav-link" data-nav="map">
+              <i data-lucide="map" class="w-4 h-4"></i><span>Live map</span>
+            </a>
+          </li>
+          <li>
+            <a href="#/alerts" class="nav-link" data-nav="alerts">
+              <i data-lucide="bell" class="w-4 h-4"></i
+              ><span>Active alerts</span>
+              <span id="nav-alert-count" class="nav-count" hidden>0</span>
+            </a>
+          </li>
+          <li>
+            <a href="#/incidents" class="nav-link" data-nav="incidents">
+              <i data-lucide="file-text" class="w-4 h-4"></i
+              ><span>Incident reports</span>
+            </a>
+          </li>
+          <li>
+            <a href="#/users" class="nav-link" data-nav="users">
+              <i data-lucide="users" class="w-4 h-4"></i
+              ><span>Users</span>
+            </a>
+          </li>
+        </ul>
+
+        <div>
+          <p class="nav-group-title">Response</p>
+          <ul class="space-y-1">
+            <li>
+              <a href="#/responders" class="nav-link" data-nav="responders">
+                <i data-lucide="users" class="w-4 h-4"></i
+                ><span>Responders</span>
+              </a>
+            </li>
+            <li>
+              <a href="#/broadcast" class="nav-link" data-nav="broadcast">
+                <i data-lucide="radio" class="w-4 h-4"></i
+                ><span>Broadcast</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <p class="nav-group-title">System</p>
+          <ul class="space-y-1">
+            <li>
+              <a href="#/reports" class="nav-link" data-nav="reports">
+                <i data-lucide="bar-chart-2" class="w-4 h-4"></i
+                ><span>Reports</span>
+              </a>
+            </li>
+            <li>
+              <a href="#/settings" class="nav-link" data-nav="settings">
+                <i data-lucide="settings" class="w-4 h-4"></i
+                ><span>Settings</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main class="flex-1 min-w-0 flex flex-col h-screen overflow-hidden page-bg">
+      <!-- Header -->
+      <header
+        class="h-20 border-b line flex items-center justify-between px-4 lg:px-8 shrink-0 surface relative z-30"
+      >
+        <div class="flex items-center gap-4 min-w-0">
+          <button
+            data-action="toggle-sidebar"
+            class="lg:hidden icon-btn"
+            aria-label="Open menu"
+          >
+            <i data-lucide="menu" class="w-6 h-6"></i>
+          </button>
+          <div class="min-w-0">
+            <h1
+              id="view-title"
+              class="text-xl lg:text-2xl font-bold tracking-tight t-main truncate"
+            >
+              Command center
+            </h1>
+            <p id="view-sub" class="text-xs lg:text-sm t-muted truncate">
+              PTC Emergency Ops
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 lg:gap-4">
+          <button
+            id="theme-toggle"
+            class="theme-toggle"
+            type="button"
+            aria-label="Switch to light mode"
+            aria-pressed="false"
+          >
+            <span id="theme-toggle-icon" class="inline-flex" aria-hidden="true"
+              ><i data-lucide="sun" class="w-4 h-4"></i
+            ></span>
+            <span id="theme-toggle-label">Light mode</span>
+          </button>
+
+          <div
+            id="net-status"
+            class="hidden sm:flex badge badge-ok"
+            style="padding: 0.35rem 0.9rem"
+          >
+            <span class="dot animate-pulse"></span
+            ><span id="net-status-text">System online</span>
+          </div>
+
+          <div class="relative">
+            <button
+              data-action="toggle-notifications"
+              class="icon-btn relative"
+              style="width: 2.5rem; height: 2.5rem"
+              aria-label="Notifications"
+              aria-haspopup="true"
+              aria-expanded="false"
+              id="notif-btn"
+            >
+              <i data-lucide="bell" class="w-5 h-5"></i>
+              <span
+                id="notif-badge"
+                hidden
+                class="absolute top-0 right-0 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                style="background: var(--brand)"
+                >0</span
+              >
+            </button>
+            <div id="notif-panel" class="notif-panel" hidden></div>
+          </div>
+
+          <a
+            href="#/settings"
+            class="flex items-center gap-3 focus-ring rounded-xl p-1"
+            aria-label="Admin profile and settings"
+          >
+            <div
+              class="w-9 h-9 rounded-lg bg-[#2563eb] flex items-center justify-center text-white font-bold text-sm"
+            >
+              AD
+            </div>
+          </a>
+        </div>
+      </header>
+
+      <div id="view-scroll" class="flex-1 overflow-y-auto p-4 lg:p-8">
+        <!-- ================================================= -->
+        <!-- VIEW: DASHBOARD                                    -->
+        <!-- ================================================= -->
+        <div data-view="dashboard" class="space-y-6 lg:space-y-8">
+          <div
+            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6"
+          >
+            <button
+              class="card stat-card focus-ring"
+              data-action="nav"
+              data-view="alerts"
+            >
+              <div class="flex justify-between items-start mb-3">
+                <p class="text-sm font-medium t-muted">Pending SOS</p>
+                <i data-lucide="alert-circle" class="w-4 h-4 t-danger"></i>
+              </div>
+              <p id="stat-sos" class="stat-value t-danger">0</p>
+              <p id="stat-sos-sub" class="text-sm font-semibold mt-2 t-muted">
+                0 awaiting dispatch
+              </p>
+            </button>
+
+            <button
+              class="card stat-card focus-ring"
+              data-action="nav"
+              data-view="responders"
+            >
+              <div class="flex justify-between items-start mb-3">
+                <p class="text-sm font-medium t-muted">Responders</p>
+                <i data-lucide="users" class="w-4 h-4 t-info"></i>
+              </div>
+              <p id="stat-resp" class="stat-value t-main">0</p>
+              <p id="stat-resp-sub" class="text-sm mt-2 t-muted">
+                0 available, 0 responding
+              </p>
+            </button>
+
+            <button
+              class="card stat-card focus-ring"
+              data-action="nav"
+              data-view="reports"
+            >
+              <div class="flex justify-between items-start mb-3">
+                <p class="text-sm font-medium t-muted">Avg response time</p>
+                <i data-lucide="clock" class="w-4 h-4 t-ok"></i>
+              </div>
+              <p id="stat-avg" class="stat-value t-main">—</p>
+              <p id="stat-avg-sub" class="text-sm mt-2 t-muted">
+                No dispatches yet
+              </p>
+            </button>
+
+            <button
+              class="card stat-card focus-ring"
+              data-action="nav"
+              data-view="settings"
+            >
+              <div class="flex justify-between items-start mb-3">
+                <p class="text-sm font-medium t-muted">Active users</p>
+                <i data-lucide="radio" class="w-4 h-4 t-faint"></i>
+              </div>
+              <p id="stat-users" class="stat-value t-main">0</p>
+              <p class="text-sm mt-2 t-muted">Registered students</p>
+            </button>
+          </div>
+
+          <section class="card emergency-feed" aria-labelledby="emergency-feed-title" hidden>
+            <div class="card-head">
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <h2 id="emergency-feed-title" class="card-title t-main">
+                    Mobile emergency requests
+                  </h2>
+                  <span id="emergency-feed-count" class="badge badge-danger">
+                    Connecting…
+                  </span>
+                </div>
+                <p
+                  id="emergency-feed-status"
+                  class="field-hint mt-1"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Waiting for the live Supabase feed…
+                </p>
+              </div>
+              <button data-action="nav" data-view="alerts" class="btn btn-sm">
+                Manage alerts
+              </button>
+            </div>
+            <div id="emergency-feed-list" class="emergency-feed-list">
+              <div class="p-5 text-sm t-muted">Connecting to incoming SOS requests…</div>
+            </div>
+          </section>
+
+          <section id="alertnest-sos-section" class="card" aria-labelledby="alertnest-sos-title">
+            <div class="card-head">
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <h2 id="alertnest-sos-title" class="card-title t-main">Pending SOS alerts</h2>
+                  <span id="alertnest-pending-count" class="badge badge-danger">0 pending</span>
+                  <span id="alertnest-feed-status" class="field-hint" role="status" aria-live="polite">Connecting to alerts…</span>
+                </div>
+              </div>
+              <button id="alertnest-audio-enable" class="btn btn-sm" type="button">Enable alarm audio</button>
+            </div>
+            <p class="field-hint px-5 pt-4">This queue shows pending SOS alerts only. Accepted or cancelled alerts remain in Incident reports.</p>
+            <div id="alertnest-flash-banner" class="sos-flash-banner" hidden role="alert">New pending SOS alert received</div>
+            <div id="alertnest-alert-list" class="sos-alert-list">
+              <div class="p-5 text-sm t-muted">Loading SOS alerts…</div>
+            </div>
+          </section>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+            <!-- Live campus map -->
+            <section
+              class="lg:col-span-8 card flex flex-col overflow-hidden"
+              aria-labelledby="map-title"
+            >
+              <div class="card-head">
+                <div class="flex items-center gap-3">
+                  <h2 id="map-title" class="card-title t-main">
+                    Live campus map
+                  </h2>
+                  <span class="badge badge-ok">Live</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button
+                    data-action="map-center"
+                    class="icon-btn"
+                    aria-label="Center on the school"
+                    title="Center on school"
+                  >
+                    <i data-lucide="crosshair" class="w-4 h-4"></i>
+                  </button>
+                  <button
+                    data-action="map-fit"
+                    class="icon-btn"
+                    aria-label="Show the school and everything nearby"
+                    title="Show all"
+                  >
+                    <i data-lucide="maximize" class="w-4 h-4"></i>
+                  </button>
+                  <button
+                    data-action="zoom-in"
+                    class="icon-btn"
+                    aria-label="Zoom in"
+                  >
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                  </button>
+                  <button
+                    data-action="zoom-out"
+                    class="icon-btn"
+                    aria-label="Zoom out"
+                  >
+                    <i data-lucide="minus" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              </div>
+              <div
+                id="map-slot-dashboard"
+                class="relative flex-1 h-[26rem] lg:h-[30rem]"
+              >
+                <!-- The single map element lives here (it moves to the Live map view when needed) -->
+                <div id="map-host" class="map-host">
+                  <div id="mapbox-map" hidden></div>
+                  <div id="map-canvas">
+                    <div class="map-grid-lines" aria-hidden="true">
+                      <div></div>
+                      <div></div>
+                      <div></div>
+                      <div></div>
+                      <div></div>
+                      <div></div>
+                      <div></div>
+                      <div></div>
+                    </div>
+                    <div id="map-markers"></div>
+                  </div>
+                  <div id="map-banner" class="map-banner" hidden></div>
+                  <div class="map-legend">
+                    <span class="legend-item"
+                      ><span
+                        class="dot"
+                        style="
+                          background: #dc2626;
+                          width: 0.65rem;
+                          height: 0.65rem;
+                        "
+                      ></span
+                      >SOS alert (waiting)</span
+                    >
+                    <span class="legend-item"
+                      ><span
+                        class="dot"
+                        style="
+                          background: #ea580c;
+                          width: 0.65rem;
+                          height: 0.65rem;
+                        "
+                      ></span
+                      >Alert being handled</span
+                    >
+                    <span class="legend-item"
+                      ><span
+                        class="dot"
+                        style="
+                          background: #2563eb;
+                          width: 0.65rem;
+                          height: 0.65rem;
+                        "
+                      ></span
+                      >Responder</span
+                    >
+                    <span class="legend-item"
+                      ><span
+                        class="dot"
+                        style="
+                          background: #16a34a;
+                          width: 0.65rem;
+                          height: 0.65rem;
+                        "
+                      ></span
+                      >Selected user location</span
+                    >
+                    <span class="legend-item"
+                      ><span class="legend-sq pin-school-mini">PTC</span>Campus</span
+                    >
+                    <span class="legend-item"
+                      ><span class="legend-sq fac-hospital">H</span>Hospital</span
+                    >
+                    <span class="legend-item"
+                      ><span class="legend-sq fac-police">P</span>Police</span
+                    >
+                    <span class="legend-item"
+                      ><span class="legend-sq fac-fire_station">F</span>Fire station</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Active alerts -->
+            <section
+              class="lg:col-span-4 card flex flex-col"
+              aria-labelledby="alerts-title"
+            >
+              <div class="card-head">
+                <h2 id="alerts-title" class="card-title t-main">
+                  Active alerts
+                </h2>
+                <button data-action="nav" data-view="alerts" class="btn btn-sm">
+                  View all
+                </button>
+              </div>
+              <div
+                id="alerts-list"
+                class="p-4 lg:p-5 space-y-3 flex-1 overflow-y-auto max-h-[30rem]"
+              ></div>
+              <div class="p-5 border-t line">
+                <button
+                  data-action="nav"
+                  data-view="broadcast"
+                  class="btn btn-primary w-full"
+                  style="padding: 0.8rem"
+                >
+                  <i data-lucide="radio" class="w-4 h-4"></i> Send campus
+                  broadcast
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <div id="sos-detail-overlay" class="sos-detail-overlay" hidden>
+            <section class="card sos-detail-panel" role="dialog" aria-modal="true" aria-labelledby="sos-detail-title">
+              <div class="card-head">
+                <div>
+                  <h2 id="sos-detail-title" class="card-title t-main">SOS details</h2>
+                  <p id="sos-detail-subtitle" class="field-hint mt-1"></p>
+                </div>
+                <button id="sos-detail-close" class="icon-btn" type="button" aria-label="Close alert details">×</button>
+              </div>
+              <div class="sos-detail-content">
+                <div id="sos-detail-facts" class="sos-detail-facts"></div>
+                <div id="sos-detail-map" class="sos-detail-map" aria-label="Victim and responder map"></div>
+                <div id="sos-responder-live" class="field-hint"></div>
+                <form id="sos-dispatch-form" class="sos-dispatch-form" hidden>
+                  <h3 class="font-semibold t-main">Choose an available responder</h3>
+                  <p class="field-hint">Responders are ordered closest to the incident first.</p>
+                  <div id="sos-responder-options" class="space-y-2"></div>
+                  <div class="flex flex-wrap gap-2">
+                    <button class="btn btn-primary" type="submit">Dispatch selected</button>
+                    <button id="sos-cancel-dispatch" class="btn" type="button">Cancel</button>
+                  </div>
+                </form>
+                <div id="sos-detail-actions" class="flex flex-wrap gap-2"></div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Responders -->
+          <section
+            class="card overflow-hidden"
+            aria-labelledby="responders-title"
+          >
+            <div class="card-head">
+              <h2 id="responders-title" class="card-title t-main">
+                Active responders
+              </h2>
+              <button
+                data-action="nav"
+                data-view="responders"
+                class="btn btn-sm"
+              >
+                Manage teams
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="data-table min-w-[640px]">
+                <thead>
+                  <tr>
+                    <th>Name &amp; contact</th>
+                    <th>Specialization</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th class="text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="responders-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <!-- ================================================= -->
+        <!-- VIEW: LIVE MAP                                     -->
+        <!-- ================================================= -->
+        <div data-view="map" hidden>
+          <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+            <section
+              class="xl:col-span-9 card flex flex-col overflow-hidden"
+              aria-label="Live map"
+            >
+              <div class="card-head">
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    class="chip"
+                    data-action="toggle-layer"
+                    data-layer="alerts"
+                    aria-pressed="true"
+                  >
+                    Alerts
+                  </button>
+                  <button
+                    class="chip"
+                    data-action="toggle-layer"
+                    data-layer="responders"
+                    aria-pressed="true"
+                  >
+                    Responders
+                  </button>
+                  <button
+                    class="chip"
+                    data-action="toggle-layer"
+                    data-layer="hospital"
+                    aria-pressed="true"
+                  >
+                    Hospitals
+                  </button>
+                  <button
+                    class="chip"
+                    data-action="toggle-layer"
+                    data-layer="police"
+                    aria-pressed="true"
+                  >
+                    Police
+                  </button>
+                  <button
+                    class="chip"
+                    data-action="toggle-layer"
+                    data-layer="fire_station"
+                    aria-pressed="true"
+                  >
+                    Fire stations
+                  </button>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button
+                    data-action="map-center"
+                    class="icon-btn"
+                    aria-label="Center on the school"
+                    title="Center on school"
+                  >
+                    <i data-lucide="crosshair" class="w-4 h-4"></i>
+                  </button>
+                  <button
+                    data-action="map-fit"
+                    class="icon-btn"
+                    aria-label="Show the school and everything nearby"
+                    title="Show all"
+                  >
+                    <i data-lucide="maximize" class="w-4 h-4"></i>
+                  </button>
+                  <button
+                    data-action="zoom-in"
+                    class="icon-btn"
+                    aria-label="Zoom in"
+                  >
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                  </button>
+                  <button
+                    data-action="zoom-out"
+                    class="icon-btn"
+                    aria-label="Zoom out"
+                  >
+                    <i data-lucide="minus" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              </div>
+              <div
+                id="map-slot-live"
+                class="relative h-[60vh] min-h-[26rem]"
+              ></div>
+            </section>
+
+            <section
+              class="xl:col-span-3 card flex flex-col"
+              aria-labelledby="live-list-title"
+            >
+              <div class="card-head">
+                <h2 id="live-list-title" class="card-title t-main">
+                  On the map
+                </h2>
+              </div>
+              <div
+                id="live-list"
+                class="p-4 space-y-2 overflow-y-auto max-h-[60vh]"
+              ></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ================================================= -->
+        <!-- VIEW: ACTIVE ALERTS                                -->
+        <!-- ================================================= -->
+        <div data-view="alerts" hidden class="space-y-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2" id="alert-filters">
+              <button
+                class="chip"
+                data-action="set-filter"
+                data-key="alertFilter"
+                data-value="active"
+              >
+                Active <span id="count-active"></span>
+              </button>
+              <button
+                class="chip"
+                data-action="set-filter"
+                data-key="alertFilter"
+                data-value="unassigned"
+              >
+                Awaiting dispatch <span id="count-unassigned"></span>
+              </button>
+              <button
+                class="chip"
+                data-action="set-filter"
+                data-key="alertFilter"
+                data-value="responding"
+              >
+                Responding <span id="count-responding"></span>
+              </button>
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+              <input
+                type="search"
+                class="input sm:w-64"
+                placeholder="Search by place, ID or type"
+                data-bind="alertQuery"
+                aria-label="Search active alerts"
+              />
+              <button class="btn btn-primary" data-action="new-incident">
+                <i data-lucide="plus" class="w-4 h-4"></i> Log incident
+              </button>
+            </div>
+          </div>
+          <div
+            id="alerts-full"
+            class="grid grid-cols-1 xl:grid-cols-2 gap-4"
+          ></div>
+        </div>
+
+        <!-- ================================================= -->
+        <!-- VIEW: INCIDENT REPORTS                             -->
+        <!-- ================================================= -->
+        <div data-view="incidents" hidden class="space-y-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <select
+              class="input sm:w-44"
+              data-bind="incStatus"
+              aria-label="Filter by status"
+            >
+              <option value="all">All statuses</option>
+              <option value="unassigned">Awaiting dispatch</option>
+              <option value="responding">Responding</option>
+              <option value="resolved">Resolved</option>
+              <option value="false_alarm">False alarm</option>
+            </select>
+            <select
+              class="input sm:w-40"
+              data-bind="incType"
+              aria-label="Filter by type"
+            >
+              <option value="all">All types</option>
+              <option value="medical">Medical</option>
+              <option value="fire">Fire</option>
+              <option value="security">Security</option>
+              <option value="other">Other</option>
+            </select>
+            <input
+              type="search"
+              class="input sm:w-64"
+              placeholder="Search by place, ID or type"
+              data-bind="incQuery"
+              aria-label="Search incidents"
+            />
+            <span id="incidents-count" class="text-sm t-muted"></span>
+            <button class="btn sm:ml-auto" data-action="export-csv">
+              <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+            </button>
+          </div>
+          <section class="card overflow-hidden" aria-label="Incident reports">
+            <div class="overflow-x-auto">
+              <table class="data-table min-w-[820px]">
+                <thead>
+                  <tr>
+                    <th>Incident</th>
+                    <th>Location</th>
+                    <th>Reported</th>
+                    <th>Status</th>
+                    <th>Responder</th>
+                    <th>Response time</th>
+                  </tr>
+                </thead>
+                <tbody id="incidents-body"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="card overflow-hidden" aria-labelledby="alertnest-history-title">
+            <div class="card-head">
+              <div>
+                <h2 id="alertnest-history-title" class="card-title t-main">SOS alert history</h2>
+                <p class="field-hint mt-1">All SOS records, including accepted, resolved and cancelled alerts.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button id="alertnest-export-csv" class="btn btn-sm" type="button">Export filtered CSV</button>
+                <button id="alertnest-export-selected" class="btn btn-sm" type="button" disabled>Export selected</button>
+                <button id="alertnest-classify-selected" class="btn btn-sm" type="button" disabled>Classify selected as False Alarm</button>
+                <button id="alertnest-delete-selected" class="btn btn-danger-ghost btn-sm" type="button" disabled>Delete selected</button>
+              </div>
+            </div>
+            <div class="sos-history-filters">
+              <label>Date <input id="alertnest-filter-date" class="input" type="date" /></label>
+              <label>Type
+                <select id="alertnest-filter-type" class="input">
+                  <option value="">All types</option>
+                  <option>Medical</option><option>Fire</option><option>Security</option><option>Accident</option><option>General</option><option>False Alarm</option>
+                </select>
+              </label>
+              <label>Status
+                <select id="alertnest-filter-status" class="input">
+                  <option value="">All statuses</option>
+                  <option>Pending</option><option>Accepted</option><option>Responding</option><option>Resolved</option><option>Cancelled</option><option>False Alarm</option>
+                </select>
+              </label>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="data-table min-w-[900px]">
+                <thead><tr><th>Select</th><th>Sent</th><th>User</th><th>Type</th><th>Location</th><th>Responder</th><th>Status</th></tr></thead>
+                <tbody id="alertnest-history-body"><tr><td colspan="7" class="t-muted">No records loaded.</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <!-- ================================================= -->
+        <!-- VIEW: USERS                                        -->
+        <!-- ================================================= -->
+        <div data-view="users" hidden class="space-y-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <section class="card stat-card">
+              <p class="text-sm font-medium t-muted">Students</p>
+              <p id="users-student-count" class="stat-value t-main mt-2">0</p>
+            </section>
+            <section class="card stat-card">
+              <p class="text-sm font-medium t-muted">Staff</p>
+              <p id="users-staff-count" class="stat-value t-main mt-2">0</p>
+            </section>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex flex-wrap gap-2" role="group" aria-label="Filter users by account category">
+              <button class="chip" type="button" data-user-category="all" aria-pressed="true">All <span id="users-all-count">0</span></button>
+              <button class="chip" type="button" data-user-category="student" aria-pressed="false">Students <span id="users-student-tab-count">0</span></button>
+              <button class="chip" type="button" data-user-category="staff" aria-pressed="false">Staff <span id="users-staff-tab-count">0</span></button>
+            </div>
+            <input id="users-search" type="search" class="input sm:w-72" placeholder="Search name, email, ID or contact" aria-label="Search users" />
+            <span id="users-feed-status" class="field-hint" role="status" aria-live="polite">Connecting to AlertNest users…</span>
+          </div>
+          <p class="field-hint">Profiles are read from Supabase. Presence uses the profile's online flag or a heartbeat within 2 minutes; SOS coordinates are used as a fallback for last known location.</p>
+          <section class="card overflow-hidden" aria-label="AlertNest users">
+            <div class="overflow-x-auto">
+              <table class="data-table min-w-[1100px]">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Program / Department</th>
+                    <th>Specialization / Role</th>
+                    <th>Presence</th>
+                    <th>Last known location</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="users-table-body">
+                  <tr><td colspan="9" class="t-muted">Loading user accounts…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section id="user-detail-panel" class="card overflow-hidden" aria-labelledby="user-detail-title" hidden>
+            <div class="card-head">
+              <div>
+                <h2 id="user-detail-title" class="card-title t-main">User details</h2>
+                <p id="user-detail-subtitle" class="field-hint mt-1"></p>
+              </div>
+              <button id="user-detail-close" class="btn btn-sm" type="button">Close details</button>
+            </div>
+            <dl id="user-detail-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 lg:p-6"></dl>
+          </section>
+        </div>
+
+        <!-- ================================================= -->
+        <!-- VIEW: RESPONDERS                                   -->
+        <!-- ================================================= -->
+        <div data-view="responders" hidden class="space-y-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <input
+              type="search"
+              class="input sm:w-64"
+              placeholder="Search by name or role"
+              data-bind="respQuery"
+              aria-label="Search responders"
+            />
+            <select
+              class="input sm:w-44"
+              data-bind="respStatus"
+              aria-label="Filter by status"
+            >
+              <option value="all">All statuses</option>
+              <option value="available">Available</option>
+              <option value="responding">Responding</option>
+              <option value="offline">Off duty</option>
+            </select>
+            <button
+              class="btn btn-primary sm:ml-auto"
+              data-action="add-responder"
+            >
+              <i data-lucide="user-plus" class="w-4 h-4"></i> Add responder
+            </button>
+          </div>
+          <section class="card overflow-hidden" aria-label="Responders">
+            <div class="overflow-x-auto">
+              <table class="data-table min-w-[860px]">
+                <thead>
+                  <tr>
+                    <th>Name &amp; contact</th>
+                    <th>Specialization</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th class="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="responders-full-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <!-- ================================================= -->
+        <!-- VIEW: BROADCAST                                    -->
+        <!-- ================================================= -->
+        <div data-view="broadcast" hidden>
+          <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+            <section class="xl:col-span-3 card" aria-labelledby="bc-title">
+              <div class="card-head">
+                <h2 id="bc-title" class="card-title t-main">New broadcast</h2>
+              </div>
+              <form id="broadcast-form" class="p-5 lg:p-6 space-y-5" novalidate>
+                <div>
+                  <span class="field-label">Quick messages</span>
+                  <div id="bc-templates" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label class="field-label" for="bc-audience">Send to</label>
+                    <select id="bc-audience" class="input">
+                      <option value="all">Everyone on campus</option>
+                      <option value="responders">Responders only</option>
+                      <option value="building">One building</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="field-label" for="bc-level">Urgency</label>
+                    <select id="bc-level" class="input">
+                      <option value="info">Notice</option>
+                      <option value="warning">Warning</option>
+                      <option value="emergency">Emergency</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div id="bc-building-wrap" hidden>
+                  <label class="field-label" for="bc-building">Building</label>
+                  <select id="bc-building" class="input"></select>
+                </div>
+
+                <div>
+                  <label class="field-label" for="bc-message">Message</label>
+                  <textarea
+                    id="bc-message"
+                    class="input"
+                    maxlength="320"
+                    placeholder="Write a clear instruction, e.g. what happened, where to go, what to do."
+                  ></textarea>
+                  <div class="flex justify-between field-hint">
+                    <span id="bc-recipients"></span>
+                    <span id="bc-count">0 / 320</span>
+                  </div>
+                </div>
+
+                <div class="flex justify-end">
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    style="padding: 0.7rem 1.2rem"
+                  >
+                    <i data-lucide="send" class="w-4 h-4"></i> Send broadcast
+                  </button>
+                </div>
+                <p
+                  id="supabase-connection-status"
+                  class="field-hint"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Connecting to Supabase…
+                </p>
+              <p class="field-hint">
+                  Announcements are saved in the Supabase
+                  <code>broadcasts</code> table (<code>data</code> JSONB) and
+                  delivered live on the <code>campus_broadcasts</code> channel
+                  with the <code>campus_alert</code> event. Student and responder
+                  clients must subscribe to that channel. Background push
+                  delivery requires push-notification service setup.
+                </p>
+              </form>
+            </section>
+
+            <section
+              class="xl:col-span-2 card flex flex-col"
+              aria-labelledby="bc-history-title"
+            >
+              <div class="card-head">
+                <h2 id="bc-history-title" class="card-title t-main">
+                  Sent broadcasts
+                </h2>
+              </div>
+              <div
+                id="broadcast-history"
+                class="p-4 space-y-3 overflow-y-auto max-h-[36rem]"
+              ></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ================================================= -->
+        <!-- VIEW: REPORTS                                      -->
+        <!-- ================================================= -->
+        <div
+          data-view="reports"
+          hidden
+          class="space-y-6"
+          id="reports-content"
+        ></div>
+
+        <!-- ================================================= -->
+        <!-- VIEW: SETTINGS                                     -->
+        <!-- ================================================= -->
+        <div data-view="settings" hidden class="space-y-6 max-w-3xl">
+          <section class="card" aria-labelledby="set-maps-title">
+            <div class="card-head">
+              <h2 id="set-maps-title" class="card-title t-main">Mapbox</h2>
+              <span id="maps-status" class="badge badge-muted"
+                >Not connected</span
+              >
+            </div>
+            <div class="p-5 lg:p-6">
+              <p class="field-hint">
+                The dashboard uses Mapbox GL JS for the campus map and nearby
+                emergency services. Restrict the public access token to this
+                site's allowed URLs in your Mapbox account.
+              </p>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="set-campus-title">
+            <div class="card-head">
+              <h2 id="set-campus-title" class="card-title t-main">Campus</h2>
+            </div>
+            <form id="campus-form" class="p-5 lg:p-6 space-y-4">
+              <div>
+                <label class="field-label" for="set-name">Campus name</label>
+                <input id="set-name" type="text" class="input" required />
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label class="field-label" for="set-lat"
+                    >Map center latitude</label
+                  >
+                  <input
+                    id="set-lat"
+                    type="number"
+                    step="any"
+                    min="-90"
+                    max="90"
+                    class="input"
+                    required
+                  />
+                </div>
+                <div>
+                  <label class="field-label" for="set-lng"
+                    >Map center longitude</label
+                  >
+                  <input
+                    id="set-lng"
+                    type="number"
+                    step="any"
+                    min="-180"
+                    max="180"
+                    class="input"
+                    required
+                  />
+                </div>
+                <div>
+                  <label class="field-label" for="set-zoom"
+                    >Default zoom (1–21)</label
+                  >
+                  <input
+                    id="set-zoom"
+                    type="number"
+                    min="1"
+                    max="21"
+                    class="input"
+                    required
+                  />
+                </div>
+              </div>
+              <p class="field-hint">
+                Tip: in your map app, right-click the campus and click the
+                coordinates to copy them.
+              </p>
+              <div class="max-w-xs">
+                <label class="field-label" for="set-radius"
+                  >Search radius for nearby services (km)</label
+                >
+                <input
+                  id="set-radius"
+                  type="number"
+                  min="0.5"
+                  max="10"
+                  step="0.5"
+                  class="input"
+                  required
+                />
+                <p class="field-hint">
+                  Hospitals, police stations and fire stations inside this
+                  distance from the school are shown on the map.
+                </p>
+              </div>
+              <button type="submit" class="btn btn-primary">
+                Save campus settings
+              </button>
+            </form>
+          </section>
+
+          <section class="card" aria-labelledby="set-prefs-title">
+            <div class="card-head">
+              <h2 id="set-prefs-title" class="card-title t-main">
+                Preferences and demo tools
+              </h2>
+            </div>
+            <div class="p-5 lg:p-6 space-y-4">
+              <label class="flex items-center gap-3 text-sm t-main">
+                <input id="set-sound" type="checkbox" class="w-4 h-4" />
+                Play a sound when a new alert arrives
+              </label>
+              <div class="flex flex-wrap gap-2">
+                <button class="btn btn-danger-ghost" data-action="reset-data">
+                  <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reset demo
+                  data
+                </button>
+              </div>
+              <p class="field-hint">
+                Everything you change is saved in this browser only. Resetting
+                restores the sample incidents and responders.
+              </p>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="set-session-title">
+            <div class="card-head">
+              <h2 id="set-session-title" class="card-title t-main">Session</h2>
+            </div>
+            <div class="p-5 lg:p-6 flex flex-wrap items-center justify-between gap-4">
+              <p class="text-sm t-muted">
+                Sign out of the SafePateros command center on this device.
+              </p>
+              <button class="btn btn-danger-ghost" type="button" data-action="logout">
+                <i data-lucide="log-out" class="w-4 h-4" aria-hidden="true"></i>
+                Log out
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <!-- ============ TOASTS ============ -->
+    <div
+      id="toast-container"
+      class="fixed bottom-6 right-6 flex flex-col gap-3 z-[80]"
+      aria-live="polite"
+    ></div>
+
+    <!-- ============ MODAL (details, forms, confirmations) ============ -->
+    <div
+      id="modal-overlay"
+      class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4"
+      data-action="close-modal-backdrop"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        class="card w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto"
+      >
+        <button
+          id="modal-close"
+          data-action="close-modal"
+          class="absolute top-4 right-4 icon-btn"
+          aria-label="Close dialog"
+        >
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+
+        <div class="flex items-center gap-4 mb-5 pr-8">
+          <div
+            id="modal-icon-wrap"
+            class="tile-icon"
+            style="width: 3rem; height: 3rem"
+          ></div>
+          <div class="min-w-0">
+            <h3 id="modal-title" class="text-xl font-bold t-main"></h3>
+            <p id="modal-sub" class="text-sm t-muted mt-0.5"></p>
+          </div>
+        </div>
+
+        <div id="modal-body" class="space-y-4"></div>
+        <div id="modal-actions" class="flex flex-wrap gap-3 mt-6"></div>
+      </div>
+    </div>
+
+    <!-- Theme switch behavior -->
+    <script>
+      const themeToggle = document.getElementById("theme-toggle");
+      const themeLabel = document.getElementById("theme-toggle-label");
+      const themeIcon = document.getElementById("theme-toggle-icon");
+
+      function updateThemeButton() {
+        const isDark = document.documentElement.classList.contains("dark");
+        themeLabel.textContent = isDark ? "Light mode" : "Dark mode";
+        themeToggle.setAttribute(
+          "aria-label",
+          isDark ? "Switch to light mode" : "Switch to dark mode"
+        );
+        themeToggle.setAttribute("aria-pressed", String(isDark));
+        themeIcon.innerHTML =
+          '<i data-lucide="' +
+          (isDark ? "sun" : "moon") +
+          '" class="w-4 h-4"></i>';
+        if (window.lucide) lucide.createIcons();
+      }
+
+      themeToggle.addEventListener("click", () => {
+        const isDark = document.documentElement.classList.toggle("dark");
+        localStorage.setItem("safepateros-theme", isDark ? "dark" : "light");
+        updateThemeButton();
+      });
+
+      updateThemeButton();
+    </script>
+
+    <!-- Your logic -->
+    <script src="app.js"></script>
+    <script type="module" src="admin-supabase.js"></script>
+    <script type="module" src="admin-alerts.js"></script>
+    <script type="module" src="admin-users.js"></script>
+    <script>
+      if (sessionStorage.getItem("safepateros-admin-welcome") === "1") {
+        sessionStorage.removeItem("safepateros-admin-welcome");
+        notify("Welcome, Admin! You are signed in to the PTC operations portal.", "success");
+      }
+    </script>
+  </body>
+</html>

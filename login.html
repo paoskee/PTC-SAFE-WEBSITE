@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Sign in to the SafePateros emergency operations portal."
+    />
+    <meta name="theme-color" content="#14532d" />
+    <title>Sign in | SafePateros</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1c2028;
+        --muted: #68707d;
+        --line: #e4e7eb;
+        --paper: #ffffff;
+        --canvas: #f5f6f8;
+        --brand: #21834d;
+        --brand-dark: #14532d;
+        --brand-soft: #eaf7ef;
+        --focus: #2563eb;
+        --success: #176b43;
+        --success-bg: #effaf4;
+        --error: #a51d24;
+        --error-bg: #fff3f2;
+        --shadow: 0 24px 70px rgba(31, 37, 49, 0.11);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        color: var(--ink);
+        background: var(--canvas);
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button,
+      a,
+      input {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 3px;
+      }
+
+      .page {
+        position: relative;
+        display: flex;
+        min-height: 100vh;
+        overflow-x: hidden;
+        background: #103b2b;
+      }
+
+      .brand-panel {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        min-height: 100vh;
+        flex-direction: column;
+        justify-content: space-between;
+        overflow: hidden;
+        padding: clamp(32px, 5vw, 72px);
+        color: #fff;
+        background:
+          linear-gradient(145deg, rgba(12, 55, 38, 0.43), rgba(17, 82, 52, 0.28)),
+          url("ptc-campus.jpe") center 54% / cover no-repeat;
+        isolation: isolate;
+      }
+
+      .brand-panel::before,
+      .brand-panel::after {
+        position: absolute;
+        z-index: -1;
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        border-radius: 50%;
+        content: "";
+        pointer-events: none;
+      }
+
+      .brand-panel::before {
+        top: 14%;
+        right: -16%;
+        width: min(47vw, 650px);
+        aspect-ratio: 1;
+      }
+
+      .brand-panel::after {
+        top: 23%;
+        right: -8%;
+        width: min(31vw, 430px);
+        aspect-ratio: 1;
+      }
+
+      .brand-lockup {
+        position: absolute;
+        top: clamp(24px, 5vw, 72px);
+        right: clamp(36px, 5vw, 72px);
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 12px;
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.36);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .brand-mark svg {
+        width: 23px;
+        height: 23px;
+      }
+
+      .brand-name {
+        display: block;
+        font-size: 1.12rem;
+        font-weight: 750;
+        letter-spacing: -0.035em;
+      }
+
+      .brand-caption {
+        display: block;
+        margin-top: 3px;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .hero {
+        position: absolute;
+        top: 50%;
+        right: clamp(36px, 5vw, 72px);
+        width: min(37%, 500px);
+        margin: 0;
+        transform: translateY(-50%);
+      }
+
+      .hero-message {
+        padding: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 16px;
+        background: rgba(8, 46, 30, 0.34);
+        backdrop-filter: blur(8px);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0 0 22px;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #a7f3c2;
+        box-shadow: 0 0 0 5px rgba(167, 243, 194, 0.16);
+      }
+
+      .hero h1 {
+        max-width: 510px;
+        margin: 0;
+        font-size: clamp(2.5rem, 5.3vw, 4.55rem);
+        font-weight: 650;
+        letter-spacing: -0.065em;
+        line-height: 1.04;
+      }
+
+      .hero-copy {
+        max-width: 410px;
+        margin: 18px 0 0;
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 1.02rem;
+        line-height: 1.75;
+      }
+
+      .signal-card {
+        display: flex;
+        width: min(100%, 380px);
+        align-items: center;
+        gap: 15px;
+        margin-top: 18px;
+        padding: 17px 19px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 16px;
+        background: rgba(8, 46, 30, 0.34);
+        backdrop-filter: blur(8px);
+      }
+
+      .signal-icon {
+        display: grid;
+        width: 43px;
+        height: 43px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.13);
+      }
+
+      .signal-icon svg {
+        width: 21px;
+        height: 21px;
+      }
+
+      .signal-title {
+        margin: 0;
+        font-size: 0.88rem;
+        font-weight: 700;
+      }
+
+      .signal-copy {
+        margin: 4px 0 0;
+        color: rgba(255, 255, 255, 0.67);
+        font-size: 0.77rem;
+      }
+
+      .brand-footer {
+        color: rgba(255, 255, 255, 0.64);
+        font-size: 0.76rem;
+      }
+
+      .login-panel {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        min-height: 100vh;
+        width: 100%;
+        padding: clamp(24px, 5vw, 72px);
+      }
+
+      .login-content {
+        width: min(100%, 370px);
+        padding: clamp(24px, 3vw, 34px);
+        border: 1px solid rgba(255, 255, 255, 0.68);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 22px 65px rgba(8, 24, 17, 0.28);
+        backdrop-filter: blur(12px);
+      }
+
+      .welcome {
+        margin-bottom: 32px;
+      }
+
+      .welcome h2 {
+        margin: 0;
+        font-size: clamp(1.8rem, 3vw, 2.2rem);
+        font-weight: 700;
+        letter-spacing: -0.055em;
+      }
+
+      .welcome p {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 0.94rem;
+        line-height: 1.6;
+      }
+
+      .field {
+        margin-top: 21px;
+      }
+
+      .field label {
+        display: block;
+        margin-bottom: 9px;
+        font-size: 0.82rem;
+        font-weight: 650;
+      }
+
+      .input-wrap {
+        position: relative;
+      }
+
+      .input-icon {
+        position: absolute;
+        top: 50%;
+        left: 15px;
+        width: 18px;
+        height: 18px;
+        color: #8a919c;
+        pointer-events: none;
+        transform: translateY(-50%);
+      }
+
+      .field input {
+        display: block;
+        width: 100%;
+        height: 52px;
+        padding: 0 48px 0 44px;
+        border: 1px solid #dce0e5;
+        border-radius: 11px;
+        color: var(--ink);
+        background: var(--paper);
+        font-size: 0.9rem;
+        transition:
+          border-color 160ms ease,
+          box-shadow 160ms ease;
+      }
+
+      .field input::placeholder {
+        color: #9aa1ab;
+      }
+
+      .field input:hover {
+        border-color: #b9c0c9;
+      }
+
+      .field input:focus {
+        border-color: var(--brand);
+        outline: none;
+        box-shadow: 0 0 0 4px rgba(33, 131, 77, 0.12);
+      }
+
+      .password-toggle {
+        position: absolute;
+        top: 50%;
+        right: 8px;
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border: 0;
+        border-radius: 8px;
+        color: #68707d;
+        background: transparent;
+        cursor: pointer;
+        transform: translateY(-50%);
+      }
+
+      .password-toggle:hover {
+        color: var(--ink);
+        background: #f2f3f5;
+      }
+
+      .password-toggle svg {
+        width: 19px;
+        height: 19px;
+      }
+
+      .form-options {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 18px 0 23px;
+        font-size: 0.81rem;
+      }
+
+      .remember {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        color: #414854;
+        cursor: pointer;
+      }
+
+      .remember input {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: var(--brand);
+      }
+
+      .text-link {
+        color: var(--brand-dark);
+        font-weight: 650;
+        text-decoration: none;
+      }
+
+      .text-link:hover {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+
+      .submit-button,
+      .sso-button,
+      .continue-button {
+        display: flex;
+        width: 100%;
+        min-height: 52px;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border-radius: 11px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          background 150ms ease,
+          border-color 150ms ease,
+          transform 150ms ease;
+      }
+
+      .submit-button,
+      .continue-button {
+        border: 1px solid var(--brand);
+        color: #fff;
+        background: var(--brand);
+        box-shadow: 0 5px 13px rgba(33, 131, 77, 0.18);
+      }
+
+      .submit-button:hover:not(:disabled),
+      .continue-button:hover {
+        border-color: #17683b;
+        background: #17683b;
+        transform: translateY(-1px);
+      }
+
+      .submit-button:disabled {
+        cursor: wait;
+        opacity: 0.8;
+      }
+
+      .spinner {
+        display: none;
+        width: 17px;
+        height: 17px;
+        border: 2px solid rgba(255, 255, 255, 0.45);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 700ms linear infinite;
+      }
+
+      .submit-button.is-loading .spinner {
+        display: block;
+      }
+
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin: 23px 0;
+        color: #89909a;
+        font-size: 0.7rem;
+        font-weight: 650;
+        letter-spacing: 0.1em;
+      }
+
+      .divider::before,
+      .divider::after {
+        height: 1px;
+        flex: 1;
+        background: var(--line);
+        content: "";
+      }
+
+      .sso-button {
+        border: 1px solid #dce0e5;
+        color: #303641;
+        background: var(--paper);
+      }
+
+      .sso-button:hover {
+        border-color: #c7cdd5;
+        background: #fafbfc;
+      }
+
+      .sso-button svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .status {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin: 16px 0 0;
+        padding: 12px 13px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        font-size: 0.82rem;
+        line-height: 1.5;
+      }
+
+      .status[hidden] {
+        display: none;
+      }
+
+      .status-error {
+        border-color: #f1cfcc;
+        color: var(--error);
+        background: var(--error-bg);
+      }
+
+      .status-success {
+        border-color: #ccebd9;
+        color: var(--success);
+        background: var(--success-bg);
+      }
+
+      .status-info {
+        border-color: #d9e5f6;
+        color: #315684;
+        background: #f3f7fd;
+      }
+
+      .status svg {
+        width: 17px;
+        height: 17px;
+        flex: 0 0 auto;
+        margin-top: 1px;
+      }
+
+      .continue-button {
+        min-height: 46px;
+        margin-top: 12px;
+        font-size: 0.84rem;
+        text-decoration: none;
+      }
+
+      .demo-note {
+        margin: 23px 0 0;
+        color: #737b87;
+        font-size: 0.74rem;
+        line-height: 1.6;
+        text-align: center;
+      }
+
+      .demo-note strong {
+        color: #555d68;
+      }
+
+      .login-footer {
+        margin-top: 34px;
+        color: #8a919c;
+        font-size: 0.73rem;
+        text-align: center;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (max-width: 860px) {
+        .brand-panel {
+          padding: 36px;
+        }
+
+        .login-panel {
+          padding: 36px;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .brand-panel {
+          min-height: 100vh;
+          padding: 22px;
+        }
+
+        .brand-lockup {
+          position: static;
+        }
+
+        .brand-panel::before,
+        .brand-panel::after,
+        .brand-panel .hero,
+        .brand-panel .brand-footer {
+          display: none;
+        }
+
+        .login-panel {
+          min-height: 100vh;
+          padding: 84px 22px 24px;
+        }
+
+        .login-content {
+          width: min(100%, 370px);
+        }
+
+        .welcome {
+          margin-bottom: 28px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="brand-panel" aria-label="SafePateros information">
+        <a class="brand-lockup" href="index.html" aria-label="SafePateros home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 3.2 19 6v5.4c0 4.4-2.9 7.8-7 9.4-4.1-1.6-7-5-7-9.4V6l7-2.8Z"
+                stroke="currentColor"
+                stroke-linejoin="round"
+                stroke-width="1.7"
+              />
+              <path
+                d="M12 8v7m-3.5-3.5h7"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-width="1.7"
+              />
+            </svg>
+          </span>
+          <span>
+            <span class="brand-name">SafePateros</span>
+            <span class="brand-caption">PTC Emergency Operations</span>
+          </span>
+        </a>
+
+        <div class="hero">
+          <div class="hero-message">
+            <p class="eyebrow"><span class="eyebrow-dot"></span> Campus response, connected</p>
+            <h1>Prepared to respond. Ready to protect.</h1>
+            <p class="hero-copy">
+              Sign in to the Pateros Technological College emergency operations
+              portal to coordinate campus safety and response.
+            </p>
+          </div>
+          <div class="signal-card">
+            <span class="signal-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 3.5 20 7v5c0 4-3.1 7.2-8 9-4.9-1.8-8-5-8-9V7l8-3.5Z"
+                  stroke="currentColor"
+                  stroke-linejoin="round"
+                  stroke-width="1.6"
+                />
+                <path
+                  d="m8.8 12.2 2.1 2.1 4.5-4.6"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.6"
+                />
+              </svg>
+            </span>
+            <span>
+              <p class="signal-title">One campus. One coordinated response.</p>
+              <p class="signal-copy">Emergency operations for the PTC community</p>
+            </span>
+          </div>
+        </div>
+
+        <footer class="brand-footer">
+          &copy; <span data-current-year></span> Pateros Technological College
+        </footer>
+      </section>
+
+      <section class="login-panel" aria-labelledby="login-title">
+        <div class="login-content">
+          <header class="welcome">
+            <h2 id="login-title">Welcome back</h2>
+            <p>Sign in with your PTC account to continue to the operations portal.</p>
+          </header>
+
+          <form id="login-form" novalidate>
+            <div class="field">
+              <label for="email">Email</label>
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M20 20v-1.7a4.3 4.3 0 0 0-4.3-4.3H8.3A4.3 4.3 0 0 0 4 18.3V20m8-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.7"
+                  />
+                </svg>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  autocomplete="email"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  required
+                  aria-describedby="form-status"
+                />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="password">Password</label>
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect
+                    x="4"
+                    y="10"
+                    width="16"
+                    height="11"
+                    rx="2"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                  />
+                  <path
+                    d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-width="1.7"
+                  />
+                </svg>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  autocomplete="current-password"
+                  required
+                  aria-describedby="form-status"
+                />
+                <button
+                  class="password-toggle"
+                  id="password-toggle"
+                  type="button"
+                  aria-label="Show password"
+                  aria-pressed="false"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"
+                      stroke="currentColor"
+                      stroke-linejoin="round"
+                      stroke-width="1.7"
+                    />
+                    <circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="1.7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-options">
+              <label class="remember" for="remember">
+                <input id="remember" name="remember" type="checkbox" />
+                <span>Remember me</span>
+              </label>
+              <a class="text-link" id="forgot-link" href="#forgot-password">
+                Forgot password?
+              </a>
+            </div>
+
+            <button class="submit-button" id="submit-button" type="submit">
+              <span class="spinner" aria-hidden="true"></span>
+              <span class="button-label">Sign in</span>
+            </button>
+
+            <p class="divider" aria-hidden="true">OR</p>
+
+            <button class="sso-button" id="sso-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="#4285F4"
+                  d="M21.35 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.24a4.48 4.48 0 0 1-1.95 2.94v2.39h3.16c1.85-1.7 2.9-4.2 2.9-7.16Z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 21.75c2.65 0 4.87-.88 6.5-2.36l-3.16-2.39c-.88.59-2 .94-3.34.94-2.56 0-4.73-1.73-5.5-4.06H3.24v2.47A9.82 9.82 0 0 0 12 21.75Z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M6.5 13.88a5.9 5.9 0 0 1 0-3.76V7.65H3.24a9.83 9.83 0 0 0 0 8.7l3.26-2.47Z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 6.06c1.45 0 2.75.5 3.77 1.5l2.83-2.83C16.87 3.11 14.65 2.25 12 2.25a9.82 9.82 0 0 0-8.76 5.4l3.26 2.47c.77-2.33 2.94-4.06 5.5-4.06Z"
+                />
+              </svg>
+              Continue with Google
+            </button>
+          </form>
+
+          <div
+            class="status status-error"
+            id="form-status"
+            role="alert"
+            aria-live="assertive"
+            hidden
+          ></div>
+
+          <p class="demo-note">
+            Sign-in is available to Supabase accounts provisioned for the PTC
+            operations portal.
+          </p>
+
+          <footer class="login-footer">
+            &copy; <span data-current-year></span> SafePateros &middot; PTC Emergency Operations
+          </footer>
+        </div>
+      </section>
+    </main>
+
+    <script type="module">
+      "use strict";
+
+      import {
+        isSupabaseConfigured,
+        setAuthPersistence,
+        supabase,
+      } from "./supabase-config.js";
+
+      const form = document.querySelector("#login-form");
+      const emailInput = document.querySelector("#email");
+      const passwordInput = document.querySelector("#password");
+      const passwordToggle = document.querySelector("#password-toggle");
+      const submitButton = document.querySelector("#submit-button");
+      const buttonLabel = submitButton.querySelector(".button-label");
+      const formStatus = document.querySelector("#form-status");
+
+      document.querySelectorAll("[data-current-year]").forEach((element) => {
+        element.textContent = new Date().getFullYear();
+      });
+
+      function showStatus(message, variant) {
+        formStatus.className = `status status-${variant}`;
+        formStatus.textContent = message;
+        formStatus.hidden = false;
+      }
+
+      function clearStatus() {
+        formStatus.hidden = true;
+        formStatus.textContent = "";
+      }
+
+      async function verifyAdmin(user) {
+        const { data: profile, error } = await supabase
+          .from("users")
+          .select("data")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (error) throw error;
+        return profile?.data?.isAdmin === true;
+      }
+
+      async function signOut() {
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+      }
+
+      if (!isSupabaseConfigured || !supabase) {
+        showStatus(
+          "Add your Supabase project URL and anon key to supabase-config.js before signing in.",
+          "error"
+        );
+        submitButton.disabled = true;
+      } else {
+        supabase.auth.onAuthStateChange((event, session) => {
+          if (event !== "INITIAL_SESSION" || !session) return;
+          window.setTimeout(async () => {
+            try {
+              if (await verifyAdmin(session.user)) {
+                window.location.replace("admin.html");
+                return;
+              }
+              await signOut();
+              showStatus(
+                "This account is not authorized to access the admin dashboard.",
+                "error"
+              );
+            } catch (error) {
+              console.error("Admin access could not be verified.", error);
+              showStatus(
+                "We could not verify admin access. Check your Supabase policies and try again.",
+                "error"
+              );
+            }
+          }, 0);
+        });
+      }
+
+      if (new URLSearchParams(window.location.search).has("accessDenied")) {
+        showStatus(
+          "This account is not authorized to access the admin dashboard.",
+          "error"
+        );
+      }
+
+      if (new URLSearchParams(window.location.search).has("authError")) {
+        showStatus(
+          "We could not verify your sign-in session. Please sign in again.",
+          "error"
+        );
+      }
+
+      passwordToggle.addEventListener("click", () => {
+        const isVisible = passwordInput.type === "text";
+        passwordInput.type = isVisible ? "password" : "text";
+        passwordToggle.setAttribute("aria-pressed", String(!isVisible));
+        passwordToggle.setAttribute(
+          "aria-label",
+          isVisible ? "Show password" : "Hide password"
+        );
+      });
+
+      document.querySelector("#forgot-link").addEventListener("click", (event) => {
+        event.preventDefault();
+        showStatus("Password recovery is not enabled. Contact your PTC administrator for help.", "info");
+      });
+
+      document.querySelector("#sso-button").addEventListener("click", () => {
+        showStatus(
+          "Google sign-in is not enabled for this portal. Use your provisioned email and password.",
+          "info"
+        );
+      });
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        clearStatus();
+
+        if (!isSupabaseConfigured || !supabase) {
+          showStatus("Add your Supabase project URL and anon key to supabase-config.js before signing in.", "error");
+          return;
+        }
+        if (!form.reportValidity()) {
+          return;
+        }
+
+        submitButton.disabled = true;
+        submitButton.classList.add("is-loading");
+        submitButton.setAttribute("aria-busy", "true");
+        buttonLabel.textContent = "Signing in...";
+
+        try {
+          setAuthPersistence(document.querySelector("#remember").checked);
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: emailInput.value.trim(),
+            password: passwordInput.value,
+          });
+          if (error) throw error;
+          const isAdmin = await verifyAdmin(data.user);
+          if (!isAdmin) {
+            await signOut();
+            throw new Error("This account is not authorized to access the admin dashboard.");
+          }
+          sessionStorage.setItem("safepateros-admin-welcome", "1");
+          buttonLabel.textContent = "Signed in. Redirecting...";
+          window.location.assign("admin.html");
+        } catch (error) {
+          submitButton.disabled = false;
+          submitButton.classList.remove("is-loading");
+          submitButton.removeAttribute("aria-busy");
+          buttonLabel.textContent = "Sign in";
+
+          const messages = {
+            invalid_credentials:
+              "The email or password is incorrect. Please check your details and try again.",
+            over_request_rate_limit:
+              "Too many sign-in attempts. Please wait a moment and try again.",
+            email_not_confirmed:
+              "Confirm your email address before signing in.",
+          };
+          const message =
+            messages[error.code] ||
+            error.message ||
+            "Sign-in failed. Please try again.";
+          if (!messages[error.code] && error.code) {
+            console.error("Supabase sign-in failed.", error);
+          }
+
+          formStatus.setAttribute("role", "alert");
+          formStatus.setAttribute("aria-live", "assertive");
+          showStatus(message, "error");
+          passwordInput.focus();
+        }
+      });
+    </script>
+  </body>
+</html>
