@@ -220,17 +220,34 @@ function normalizeSOSRecord(source) {
     responderName:
       record.responderName || record.responder_name ||
       record.assignedResponder?.name || record.responderInfo?.name || "",
+    assignedResponderId:
+      record.responder_id || record.assignedResponderId ||
+      record.assigned_responder_id || "",
     responderPhone:
       record.responderPhone || record.responder_phone ||
       record.assignedResponder?.phone || record.responderInfo?.phone || "",
+    responderUnit:
+      record.responder_unit || record.responderUnit ||
+      record.assignedResponder?.unit || "",
+    responderSpecialty:
+      record.responder_specialty || record.responderSpecialty ||
+      record.assignedResponder?.specialty || "",
     responderEtaMinutes:
       record.responderEtaMinutes ?? record.responder_eta_minutes ??
       record.assignedResponder?.etaMinutes ?? record.responderInfo?.etaMinutes,
+    adminNote: record.admin_note || record.adminNote || "",
+    acceptedAt: record.accepted_at || record.acceptedAt || null,
+    resolvedAt: record.resolved_at || record.resolvedAt || null,
+    responderLocationUpdatedAt:
+      record.responder_location_updated_at ||
+      record.responderLocationUpdatedAt || null,
     responderLatitude:
-      record.responderLatitude ?? record.responderLocation?.latitude ??
+      record.responder_latitude ?? record.responderLatitude ??
+      record.responderLocation?.latitude ??
       record.responderLocation?.lat ?? record.responder_location?.latitude,
     responderLongitude:
-      record.responderLongitude ?? record.responderLocation?.longitude ??
+      record.responder_longitude ?? record.responderLongitude ??
+      record.responderLocation?.longitude ??
       record.responderLocation?.lng ?? record.responder_location?.longitude,
   };
 }

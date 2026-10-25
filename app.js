@@ -2028,16 +2028,18 @@ function formatAlertFromSupabase(record) {
     createdAt: timestampMillisFromRecord(
       record.timestamp || record.createdAt || record.created_at
     ),
-    dispatchedAt: record.acceptedAt
-      ? timestampMillisFromRecord(record.acceptedAt)
+    dispatchedAt: record.accepted_at || record.acceptedAt || record.dispatched_at
+      ? timestampMillisFromRecord(
+          record.accepted_at || record.acceptedAt || record.dispatched_at
+        )
       : null,
-    resolvedAt: record.resolvedAt
-      ? timestampMillisFromRecord(record.resolvedAt)
+    resolvedAt: record.resolved_at || record.resolvedAt
+      ? timestampMillisFromRecord(record.resolved_at || record.resolvedAt)
       : null,
-    responderId: String(record.assignedResponderId || ""),
-    responderName: String(record.responderName || ""),
-    responderLatitude: Number(record.responderLatitude),
-    responderLongitude: Number(record.responderLongitude),
+    responderId: String(record.responder_id || record.assignedResponderId || ""),
+    responderName: String(record.responder_name || record.responderName || ""),
+    responderLatitude: Number(record.responder_latitude ?? record.responderLatitude),
+    responderLongitude: Number(record.responder_longitude ?? record.responderLongitude),
   };
 }
 

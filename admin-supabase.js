@@ -6,10 +6,16 @@ async function initializeDashboardSupabase() {
     return;
   }
 
+  let authorizedUserId = null;
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((_event, session) => {
-    if (!session) window.location.replace("login.html");
+    if (
+      !session ||
+      (authorizedUserId && session.user.id !== authorizedUserId)
+    ) {
+      window.location.replace("login.html");
+    }
   });
 
   try {
@@ -20,6 +26,7 @@ async function initializeDashboardSupabase() {
       window.location.replace("login.html");
       return;
     }
+    authorizedUserId = user.id;
 
     const { data: profile, error: profileError } = await supabase
       .from("users")
@@ -48,6 +55,7 @@ async function initializeDashboardSupabase() {
             subscribeToSOSRecords: service.subscribeToSOSRecords,
             subscribeToIncidents: service.subscribeToIncidents,
             subscribeToUsers: service.subscribeToUsers,
+            getActiveAlerts: service.getActiveAlerts,
             getStaffResponders: service.getStaffResponders,
             acceptAndDispatchAlert: service.acceptAndDispatchAlert,
             dispatchSOSRecord: service.dispatchSOSRecord,

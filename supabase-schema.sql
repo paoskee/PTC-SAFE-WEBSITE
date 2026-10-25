@@ -1,5 +1,6 @@
 -- Run in the Supabase SQL editor before deploying the frontend.
--- Each table stores a document-compatible JSONB payload in its data column.
+-- Most tables use a document-compatible JSONB payload; alerts also expose
+-- searchable and writable relational columns for the dashboard and RLS.
 create table if not exists public.users (
   id text primary key,
   data jsonb not null default '{}'::jsonb
@@ -7,8 +8,157 @@ create table if not exists public.users (
 
 create table if not exists public.alerts (
   id text primary key default gen_random_uuid()::text,
+  user_id text,
+  responder_id text,
+  latitude double precision,
+  longitude double precision,
+  emergency_type text,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  responder_name text,
+  responder_phone text,
+  responder_unit text,
+  responder_specialty text,
+  responder_eta_minutes double precision,
+  admin_note text,
+  accepted_at timestamptz,
+  dispatched_at timestamptz,
+  resolved_at timestamptz,
+  responder_latitude double precision,
+  responder_longitude double precision,
+  responder_location_updated_at timestamptz,
   data jsonb not null default '{}'::jsonb
 );
+
+alter table public.alerts
+  add column if not exists user_id text,
+  add column if not exists responder_id text,
+  add column if not exists latitude double precision,
+  add column if not exists longitude double precision,
+  add column if not exists emergency_type text,
+  add column if not exists status text,
+  add column if not exists created_at timestamptz,
+  add column if not exists responder_name text,
+  add column if not exists responder_phone text,
+  add column if not exists responder_unit text,
+  add column if not exists responder_specialty text,
+  add column if not exists responder_eta_minutes double precision,
+  add column if not exists admin_note text,
+  add column if not exists accepted_at timestamptz,
+  add column if not exists dispatched_at timestamptz,
+  add column if not exists resolved_at timestamptz,
+  add column if not exists responder_latitude double precision,
+  add column if not exists responder_longitude double precision,
+  add column if not exists responder_location_updated_at timestamptz,
+  add column if not exists data jsonb not null default '{}'::jsonb;
+
+update public.alerts
+set
+  user_id = coalesce(user_id, nullif(data ->> 'user_id', ''), nullif(data ->> 'userId', '')),
+  responder_id = coalesce(
+    responder_id,
+    nullif(data ->> 'responder_id', ''),
+    nullif(data ->> 'responderId', ''),
+    nullif(data ->> 'assignedResponderId', '')
+  ),
+  latitude = coalesce(
+    latitude,
+    case
+      when coalesce(data ->> 'latitude', data ->> 'lat') ~ '^-?[0-9]+([.][0-9]+)?$'
+        then coalesce(data ->> 'latitude', data ->> 'lat')::double precision
+    end
+  ),
+  longitude = coalesce(
+    longitude,
+    case
+      when coalesce(data ->> 'longitude', data ->> 'lng') ~ '^-?[0-9]+([.][0-9]+)?$'
+        then coalesce(data ->> 'longitude', data ->> 'lng')::double precision
+    end
+  ),
+  emergency_type = coalesce(
+    emergency_type,
+    nullif(data ->> 'emergency_type', ''),
+    nullif(data ->> 'emergencyType', ''),
+    nullif(data ->> 'alert_type', '')
+  ),
+  status = lower(coalesce(nullif(status, ''), nullif(data ->> 'status', ''), 'pending')),
+  responder_name = coalesce(
+    responder_name,
+    nullif(data ->> 'responder_name', ''),
+    nullif(data ->> 'responderName', '')
+  ),
+  responder_phone = coalesce(
+    responder_phone,
+    nullif(data ->> 'responder_phone', ''),
+    nullif(data ->> 'responderPhone', '')
+  ),
+  responder_unit = coalesce(
+    responder_unit,
+    nullif(data ->> 'responder_unit', ''),
+    nullif(data ->> 'responderUnit', '')
+  ),
+  responder_specialty = coalesce(
+    responder_specialty,
+    nullif(data ->> 'responder_specialty', ''),
+    nullif(data ->> 'responderSpecialty', '')
+  ),
+  responder_eta_minutes = coalesce(
+    responder_eta_minutes,
+    case
+      when data ->> 'responderEtaMinutes' ~ '^-?[0-9]+([.][0-9]+)?$'
+        then (data ->> 'responderEtaMinutes')::double precision
+    end
+  ),
+  admin_note = coalesce(admin_note, nullif(data ->> 'adminNote', '')),
+  accepted_at = coalesce(
+    accepted_at,
+    case
+      when coalesce(data ->> 'accepted_at', data ->> 'acceptedAt') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+        then coalesce(data ->> 'accepted_at', data ->> 'acceptedAt')::timestamptz
+    end
+  ),
+  dispatched_at = coalesce(
+    dispatched_at,
+    case
+      when coalesce(data ->> 'dispatched_at', data ->> 'dispatchedAt') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+        then coalesce(data ->> 'dispatched_at', data ->> 'dispatchedAt')::timestamptz
+    end
+  ),
+  resolved_at = coalesce(
+    resolved_at,
+    case
+      when coalesce(data ->> 'resolved_at', data ->> 'resolvedAt') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+        then coalesce(data ->> 'resolved_at', data ->> 'resolvedAt')::timestamptz
+    end
+  ),
+  responder_latitude = coalesce(
+    responder_latitude,
+    case
+      when data ->> 'responderLatitude' ~ '^-?[0-9]+([.][0-9]+)?$'
+        then (data ->> 'responderLatitude')::double precision
+    end
+  ),
+  responder_longitude = coalesce(
+    responder_longitude,
+    case
+      when data ->> 'responderLongitude' ~ '^-?[0-9]+([.][0-9]+)?$'
+        then (data ->> 'responderLongitude')::double precision
+    end
+  ),
+  created_at = coalesce(
+    created_at,
+    case
+      when coalesce(data ->> 'created_at', data ->> 'createdAt') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+        then coalesce(data ->> 'created_at', data ->> 'createdAt')::timestamptz
+    end,
+    now()
+  );
+
+alter table public.alerts
+  alter column status set default 'pending',
+  alter column status set not null,
+  alter column created_at set default now(),
+  alter column created_at set not null;
 
 create table if not exists public.emergency_requests (
   id text primary key default gen_random_uuid()::text,
@@ -90,14 +240,14 @@ create policy "Admins can manage alerts"
 drop policy if exists "Users can read their alerts" on public.alerts;
 create policy "Users can read their alerts"
   on public.alerts for select to authenticated
-  using (data ->> 'userId' = (select auth.uid())::text);
+  using (user_id = (select auth.uid())::text);
 
 drop policy if exists "Users can create their alerts" on public.alerts;
 create policy "Users can create their alerts"
   on public.alerts for insert to authenticated
   with check (
-    data ->> 'userId' = (select auth.uid())::text
-    and lower(coalesce(data ->> 'status', 'pending')) = 'pending'
+    user_id = (select auth.uid())::text
+    and lower(coalesce(status, 'pending')) = 'pending'
   );
 
 drop policy if exists "Admins can manage emergency requests" on public.emergency_requests;

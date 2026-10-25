@@ -1,8 +1,24 @@
 import { supabase } from "./supabase-config.js";
 
+const ALERT_COLUMNS =
+  "id,user_id,responder_id,latitude,longitude,emergency_type,status,created_at,responder_name,responder_phone,responder_unit,responder_specialty,responder_eta_minutes,admin_note,accepted_at,dispatched_at,resolved_at,responder_latitude,responder_longitude,responder_location_updated_at";
+
 function client() {
   if (!supabase) throw new Error("Supabase is not configured.");
   return supabase;
+}
+
+async function requireAdminSession() {
+  const db = client();
+  const { data, error } = await db.auth.getSession();
+  if (error) throw error;
+  if (!data.session) throw new Error("Sign in as an administrator to update alerts.");
+
+  const { data: isAdmin, error: adminError } = await db.rpc("is_admin");
+  if (adminError) throw adminError;
+  if (isAdmin !== true) {
+    throw new Error("Administrator access is required to update alerts.");
+  }
 }
 
 function documents(rows = []) {
@@ -229,10 +245,20 @@ export function subscribeToEmergencyRequests(onUpdateCallback, onError) {
 }
 
 export function subscribeToAlerts(onUpdateCallback, onError) {
-  return subscribeToUserEnrichedDocuments("alerts", onUpdateCallback, onError);
+  return subscribeToUserEnrichedDocuments(
+    "alerts",
+    onUpdateCallback,
+    onError,
+    ALERT_COLUMNS
+  );
 }
 
-function subscribeToUserEnrichedDocuments(table, onUpdateCallback, onError) {
+function subscribeToUserEnrichedDocuments(
+  table,
+  onUpdateCallback,
+  onError,
+  selectFields = "*"
+) {
   const db = client();
   let active = true;
   let version = 0;
@@ -275,7 +301,7 @@ function subscribeToUserEnrichedDocuments(table, onUpdateCallback, onError) {
     },
     onError,
     undefined,
-    "*"
+    selectFields
   );
   return () => {
     active = false;
@@ -343,7 +369,7 @@ export function subscribeToSOSRecords(onUpdateCallback, onError) {
         },
         onError,
         undefined,
-        "*"
+        table === "alerts" ? ALERT_COLUMNS : "*"
       )
     );
   }
@@ -490,25 +516,61 @@ export async function getStaffResponders() {
 }
 
 export async function acceptAndDispatchAlert(alertId, responder) {
-  await updateDocument(
-    "alerts",
-    alertId,
-    {
-      status: "Accepted",
-      assignedResponderId: responder.id,
-      responderName: responder.name,
-      responderPhone: responder.phone,
-      responderUnit: responder.unit,
-      responderSpecialty: responder.specialty,
-      responderEtaMinutes: responder.etaMinutes,
-      adminNote: responder.adminNote,
-      acceptedAt: new Date().toISOString(),
-    },
-    "Pending"
-  );
+  await dispatchAlert(alertId, responder);
 }
 
 const SOS_TABLES = new Set(["alerts", "emergency_requests", "incidents"]);
+
+function alertStatusForStorage(status) {
+  return ({
+    Accepted: "dispatched",
+    Responding: "dispatched",
+    Dispatched: "dispatched",
+    Resolved: "resolved",
+    Declined: "declined",
+    Cancelled: "cancelled",
+    "False Alarm": "false_alarm",
+  })[status] || String(status).trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+async function updateAlertRow(alertId, updates, expectedStatuses) {
+  await requireAdminSession();
+  let query = client()
+    .from("alerts")
+    .update(updates)
+    .eq("id", alertId);
+  if (expectedStatuses?.length) query = query.in("status", expectedStatuses);
+
+  const { data, error } = await query.select("id");
+  if (error) throw error;
+  if (!data?.length) {
+    throw new Error(
+      expectedStatuses?.length
+        ? "The alert is no longer pending."
+        : "The alert no longer exists."
+    );
+  }
+}
+
+async function dispatchAlert(alertId, responder) {
+  const now = new Date().toISOString();
+  await updateAlertRow(
+    alertId,
+    {
+      status: "dispatched",
+      responder_id: responder.id,
+      responder_name: responder.name,
+      responder_phone: responder.phone,
+      responder_unit: responder.unit,
+      responder_specialty: responder.specialty,
+      responder_eta_minutes: responder.etaMinutes,
+      admin_note: responder.adminNote || null,
+      accepted_at: now,
+      dispatched_at: now,
+    },
+    ["pending", "active", "new", "unhandled"]
+  );
+}
 
 function statusForStorage(status, currentStatus) {
   const value = {
@@ -582,6 +644,10 @@ async function updateSOSRecord(table, recordId, patch, expectedStatuses) {
 }
 
 export async function dispatchSOSRecord(table, recordId, responder) {
+  if (table === "alerts") {
+    await dispatchAlert(recordId, responder);
+    return;
+  }
   const now = new Date().toISOString();
   await updateSOSRecord(
     table,
@@ -602,6 +668,10 @@ export async function dispatchSOSRecord(table, recordId, responder) {
 }
 
 export async function updateSOSRecordStatus(table, recordId, status) {
+  if (table === "alerts") {
+    await updateAlertStatus(recordId, status);
+    return;
+  }
   const patch = { status };
   if (status === "Resolved") patch.resolvedAt = new Date().toISOString();
   if (status === "Declined" || status === "False Alarm") {
@@ -611,6 +681,10 @@ export async function updateSOSRecordStatus(table, recordId, status) {
 }
 
 export async function updateSOSResponderLocation(table, recordId, latitude, longitude) {
+  if (table === "alerts") {
+    await updateAlertResponderLocation(recordId, latitude, longitude);
+    return;
+  }
   await updateSOSRecord(table, recordId, {
     responderLatitude: latitude,
     responderLongitude: longitude,
@@ -620,6 +694,7 @@ export async function updateSOSResponderLocation(table, recordId, latitude, long
 
 export async function deleteSOSRecord(table, recordId) {
   if (!SOS_TABLES.has(table)) throw new Error("Unsupported SOS record table.");
+  if (table === "alerts") await requireAdminSession();
   const { data, error } = await client()
     .from(table)
     .delete()
@@ -630,20 +705,34 @@ export async function deleteSOSRecord(table, recordId) {
 }
 
 export async function updateAlertStatus(alertId, status) {
-  const updates = { status };
-  if (status === "Resolved") updates.resolvedAt = new Date().toISOString();
-  await updateDocument("alerts", alertId, updates);
+  const updates = { status: alertStatusForStorage(status) };
+  if (updates.status === "resolved") {
+    updates.resolved_at = new Date().toISOString();
+  }
+  await updateAlertRow(alertId, updates);
 }
 
 export async function updateAlertResponderLocation(alertId, latitude, longitude) {
-  await updateDocument("alerts", alertId, {
-    responderLatitude: latitude,
-    responderLongitude: longitude,
-    responderLocationUpdatedAt: new Date().toISOString(),
+  await updateAlertRow(alertId, {
+    responder_latitude: latitude,
+    responder_longitude: longitude,
+    responder_location_updated_at: new Date().toISOString(),
   });
 }
 
+export async function getActiveAlerts() {
+  await requireAdminSession();
+  const { data, error } = await client()
+    .from("alerts")
+    .select(ALERT_COLUMNS)
+    .in("status", ["pending", "active", "new", "unhandled", "dispatched", "accepted", "responding"])
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
 export async function deleteAlertRecord(alertId) {
+  await requireAdminSession();
   const { data, error } = await client()
     .from("alerts")
     .delete()
