@@ -243,21 +243,28 @@ function userCategory(user) {
     .map((key) => fieldValue(user, [key]))
     .join(" ")
     .toLowerCase();
-  const isStudent =
-    user.isStudent === true ||
-    fieldValue(user, ["isStudent"]) === "true" ||
-    fieldValue(user, ["is_student"]) === "true" ||
-    fieldValue(user, ["studentId", "student_id", "studentNumber", "student_number"]) ||
-    /student/i.test(role);
+
   const isStaff =
     user.isStaff === true ||
     user.isAdmin === true ||
+    user.is_admin === true ||
     fieldValue(user, ["isStaff"]) === "true" ||
     fieldValue(user, ["isAdmin"]) === "true" ||
-    fieldValue(user, ["staffId", "staff_id", "employeeId", "employee_id", "staffSpecialty"]) ||
+    fieldValue(user, ["is_admin"]) === "true" ||
+    fieldValue(user, ["staffId", "staff_id", "employeeId", "employee_id", "staffSpecialty", "staff_specialty"]) ||
     /\b(staff|faculty|teacher|employee|admin|instructor|responder)\b/i.test(role);
-  if (isStudent) return "student";
+
+  const isStudent =
+    !isStaff && (
+      user.isStudent === true ||
+      fieldValue(user, ["isStudent"]) === "true" ||
+      fieldValue(user, ["is_student"]) === "true" ||
+      fieldValue(user, ["studentId", "student_id", "studentNumber", "student_number"]) ||
+      /student/i.test(role)
+    );
+
   if (isStaff) return "staff";
+  if (isStudent) return "student";
   if (fieldValue(user, ["course", "program", "studentCourse"])) return "student";
   return "other";
 }
@@ -313,10 +320,10 @@ function renderUsers() {
       const presence = onlineState(user);
       const location = locationForUser(user);
       const specialty = category === "staff"
-        ? fieldValue(user, ["staffSpecialty", "specialization", "specialty", "staffRole", "jobTitle", "position", "role"])
+        ? fieldValue(user, ["staffSpecialty", "staff_specialty", "specialization", "specialty", "staffRole", "jobTitle", "position", "role"])
         : "";
       return `<tr>
-        <td class="t-main"><strong>${escapeHtml(userName(user))}</strong><span class="block text-xs t-muted">${escapeHtml(user.studentId || user.studentNumber || user.staffId || user.employeeId || user.id)}</span></td>
+        <td class="t-main"><strong>${escapeHtml(userName(user))}</strong><span class="block text-xs t-muted">${escapeHtml(user.studentId || user.student_id || user.studentNumber || user.staffId || user.employeeId || user.id)}</span></td>
         <td>${escapeHtml(category === "other" ? "Other / unspecified" : category === "student" ? "Student" : "Staff")}</td>
         <td class="t-main">${escapeHtml(email || "—")}</td>
         <td class="t-main">${escapeHtml(phone || "—")}</td>
