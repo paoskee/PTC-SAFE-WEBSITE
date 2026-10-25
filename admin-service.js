@@ -1,7 +1,7 @@
 import { supabase } from "./supabase-config.js";
 
 const ALERT_COLUMNS =
-  "id,user_id,responder_id,latitude,longitude,emergency_type,status,created_at,responder_name,responder_phone,responder_unit,responder_specialty,responder_eta_minutes,admin_note,accepted_at,dispatched_at,resolved_at,responder_latitude,responder_longitude,responder_location_updated_at";
+  "id,user_id,user_name,user_phone,emergency_type,latitude,longitude,status,created_at";
 
 function client() {
   if (!supabase) throw new Error("Supabase is not configured.");
@@ -73,6 +73,9 @@ function subscribeToDocuments(
       "postgres_changes",
       { event: "*", schema: "public", table },
       (payload) => {
+        if (table === "alerts") {
+          console.log("Supabase alerts realtime payload:", payload);
+        }
         if (!initialized) {
           pendingChanges.push(payload);
           return;
@@ -127,6 +130,9 @@ function subscribeToDocuments(
         return;
       }
       const page = data || [];
+      if (table === "alerts") {
+        console.log("Supabase alerts fetch payload:", page);
+      }
       loadedRows.push(...page);
       if (rowLimit || page.length < pageSize) break;
       offset += page.length;
@@ -249,7 +255,7 @@ export function subscribeToAlerts(onUpdateCallback, onError) {
     "alerts",
     onUpdateCallback,
     onError,
-    ALERT_COLUMNS
+    "*"
   );
 }
 
@@ -369,7 +375,7 @@ export function subscribeToSOSRecords(onUpdateCallback, onError) {
         },
         onError,
         undefined,
-        table === "alerts" ? ALERT_COLUMNS : "*"
+        "*"
       )
     );
   }
@@ -535,10 +541,25 @@ function alertStatusForStorage(status) {
 
 async function updateAlertRow(alertId, updates, expectedStatuses) {
   await requireAdminSession();
-  let query = client()
+  const db = client();
+  const { data: current, error: readError } = await db
     .from("alerts")
-    .update(updates)
-    .eq("id", alertId);
+    .select("*")
+    .eq("id", alertId)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!current) {
+    throw new Error(
+      expectedStatuses?.length
+        ? "The alert is no longer pending."
+        : "The alert no longer exists."
+    );
+  }
+  const supportedUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([field]) => Object.hasOwn(current, field))
+  );
+
+  let query = db.from("alerts").update(supportedUpdates).eq("id", alertId);
   if (expectedStatuses?.length) query = query.in("status", expectedStatuses);
 
   const { data, error } = await query.select("id");
@@ -725,9 +746,10 @@ export async function getActiveAlerts() {
   const { data, error } = await client()
     .from("alerts")
     .select(ALERT_COLUMNS)
-    .in("status", ["pending", "active", "new", "unhandled", "dispatched", "accepted", "responding"])
+    .eq("status", "pending")
     .order("created_at", { ascending: false });
   if (error) throw error;
+  console.log("Supabase pending alerts fetch payload:", data || []);
   return data || [];
 }
 

@@ -9,6 +9,8 @@ create table if not exists public.users (
 create table if not exists public.alerts (
   id text primary key default gen_random_uuid()::text,
   user_id text,
+  user_name text,
+  user_phone text,
   responder_id text,
   latitude double precision,
   longitude double precision,
@@ -32,6 +34,8 @@ create table if not exists public.alerts (
 
 alter table public.alerts
   add column if not exists user_id text,
+  add column if not exists user_name text,
+  add column if not exists user_phone text,
   add column if not exists responder_id text,
   add column if not exists latitude double precision,
   add column if not exists longitude double precision,
@@ -55,6 +59,16 @@ alter table public.alerts
 update public.alerts
 set
   user_id = coalesce(user_id, nullif(data ->> 'user_id', ''), nullif(data ->> 'userId', '')),
+  user_name = coalesce(
+    user_name,
+    nullif(data ->> 'user_name', ''),
+    nullif(data ->> 'userName', '')
+  ),
+  user_phone = coalesce(
+    user_phone,
+    nullif(data ->> 'user_phone', ''),
+    nullif(data ->> 'userPhone', '')
+  ),
   responder_id = coalesce(
     responder_id,
     nullif(data ->> 'responder_id', ''),
