@@ -458,12 +458,23 @@
                       ><span
                         class="dot"
                         style="
-                          background: #2563eb;
+                          background: #16a34a;
                           width: 0.65rem;
                           height: 0.65rem;
                         "
                       ></span
-                      >Responder</span
+                      >Online &amp; on-duty responder</span
+                    >
+                    <span class="legend-item"
+                      ><span
+                        class="dot"
+                        style="
+                          background: #71717a;
+                          width: 0.65rem;
+                          height: 0.65rem;
+                        "
+                      ></span
+                      >Offline / off-duty last known location</span
                     >
                     <span class="legend-item"
                       ><span
@@ -543,11 +554,11 @@
                 <div id="sos-detail-map" class="sos-detail-map" aria-label="Victim and responder map"></div>
                 <div id="sos-responder-live" class="field-hint"></div>
                 <form id="sos-dispatch-form" class="sos-dispatch-form" hidden>
-                  <h3 class="font-semibold t-main">Choose an available responder</h3>
-                  <p class="field-hint">Responders are ordered closest to the incident first.</p>
+                  <h3 class="font-semibold t-main">Assign an available responder</h3>
+                  <p class="field-hint">Only online, on-duty responders without an active assignment are listed. Responders are ordered closest to the incident first.</p>
                   <div id="sos-responder-options" class="space-y-2"></div>
                   <div class="flex flex-wrap gap-2">
-                    <button class="btn btn-primary" type="submit">Dispatch selected</button>
+                    <button class="btn btn-primary" type="submit">Assign selected responder</button>
                     <button id="sos-cancel-dispatch" class="btn" type="button">Cancel</button>
                   </div>
                 </form>
@@ -861,9 +872,9 @@
               </label>
             </div>
             <div class="overflow-x-auto">
-              <table class="data-table min-w-[900px]">
-                <thead><tr><th><label class="flex items-center gap-2"><input id="alertnest-history-select-all" type="checkbox" aria-label="Select all visible SOS history records" /><span>Select all</span></label></th><th>Sent</th><th>User</th><th>Type</th><th>Location</th><th>Responder</th><th>Status</th></tr></thead>
-                <tbody id="alertnest-history-body"><tr><td colspan="7" class="t-muted">No records loaded.</td></tr></tbody>
+              <table class="data-table min-w-[1200px]">
+                <thead><tr><th><label class="flex items-center gap-2"><input id="alertnest-history-select-all" type="checkbox" aria-label="Select all visible SOS history records" /><span>Select all</span></label></th><th>Sent</th><th>User</th><th>Type</th><th>Location</th><th>Responder</th><th>Alert status</th><th>Responder status</th><th>Resolution report</th></tr></thead>
+                <tbody id="alertnest-history-body"><tr><td colspan="9" class="t-muted">No records loaded.</td></tr></tbody>
               </table>
             </div>
           </section>

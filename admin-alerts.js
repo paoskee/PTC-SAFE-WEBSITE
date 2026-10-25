@@ -47,6 +47,7 @@ const normalizedStatus = (value) => {
     unhandled: "Pending",
     unassigned: "Pending",
     accepted: "Accepted",
+    pending_acceptance: "Pending acceptance",
     assigned: "Responding",
     dispatched: "Responding",
     responding: "Responding",
@@ -74,6 +75,7 @@ const normalizedStatus = (value) => {
     declined: "Cancelled",
     rejected: "Cancelled",
     false_alarm: "False Alarm",
+    fake_alarm: "Fake Alarm",
   };
   return known[key] ||
     (status ? status.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Unknown");
@@ -221,8 +223,12 @@ function normalizeSOSRecord(source) {
       record.responderName || record.responder_name ||
       record.assignedResponder?.name || record.responderInfo?.name || "",
     assignedResponderId:
-      record.responder_id || record.assignedResponderId ||
-      record.assigned_responder_id || "",
+      record.assigned_responder_id || record.responder_id ||
+      record.assignedResponderId || "",
+    responderStatus:
+      record.responder_status || record.responderStatus || "",
+    resolutionReport:
+      record.resolution_report ?? record.resolutionReport ?? null,
     responderPhone:
       record.responderPhone || record.responder_phone ||
       record.assignedResponder?.phone || record.responderInfo?.phone || "",
@@ -429,22 +435,43 @@ function renderAlertCards() {
       <button class="sos-alert-card" type="button" data-open-alert="${escapeHtml(alert.id)}">
         <div class="sos-alert-card-head">
           <strong>${escapeHtml(userNameOf(alert))}</strong>
-          <span class="sos-status ${statusClass(alert.status)}">Pending</span>
+          <span class="sos-status ${statusClass(alert.status)}">${escapeHtml(
+            alert.responderStatus
+              ? normalizedStatus(alert.responderStatus)
+              : "Pending"
+          )}</span>
         </div>
         <div class="sos-alert-meta">
           <span>${escapeHtml(roleOf(alert))}</span><span>${escapeHtml(phoneOf(alert))}</span>
           <span>${escapeHtml(typeOf(alert))}</span><span>${escapeHtml(dateText(alert.timestamp))}</span>
         </div>
         <div class="sos-alert-location">${escapeHtml(addressOf(alert))}</div>
+        ${alert.responderName ? `<span class="field-hint block px-4">Assigned to ${escapeHtml(alert.responderName)} · awaiting acceptance</span>` : ""}
         <span class="field-hint">${escapeHtml(elapsedText(alert.timestamp))}</span>
       </button>
       ${mapsLinkOf(alert) ? `<a class="field-hint inline-block px-4 pb-2" href="${mapsLinkOf(alert)}" target="_blank" rel="noopener noreferrer">Open precise location in Google Maps</a>` : ""}
       <div class="alert-actions px-4 pb-4">
-        <button class="btn btn-primary btn-sm" type="button" data-dispatch-nearest="${escapeHtml(alert.id)}">Dispatch nearest</button>
-        <button class="btn btn-sm" type="button" data-choose-responder="${escapeHtml(alert.id)}">Choose responder</button>
+        ${alert.assignedResponderId ? "" : `<button class="btn btn-primary btn-sm" type="button" data-dispatch-nearest="${escapeHtml(alert.id)}">Assign nearest</button>
+        <button class="btn btn-sm" type="button" data-choose-responder="${escapeHtml(alert.id)}">Assign responder</button>`}
         <button class="btn btn-danger-ghost btn-sm" type="button" data-cancel-alert="${escapeHtml(alert.id)}">Cancel SOS</button>
       </div>
     </article>`).join("");
+}
+
+function resolutionReportText(alert) {
+  const report = alert.resolutionReport;
+  if (report == null || report === "") return "—";
+  if (typeof report === "string") return report;
+  if (typeof report !== "object") return String(report);
+  return Object.entries(report)
+    .map(([key, value]) => {
+      const rendered = value && typeof value === "object"
+        ? JSON.stringify(value)
+        : String(value ?? "");
+      return rendered ? `${key}: ${rendered}` : "";
+    })
+    .filter(Boolean)
+    .join(" · ") || "—";
 }
 
 function filteredAlerts() {
@@ -489,8 +516,10 @@ function renderHistory() {
         <td>${escapeHtml(addressOf(alert))}</td>
         <td>${escapeHtml(alert.responderName || "—")}${alert.responderName ? `<span class="block text-xs t-muted">ETA: ${escapeHtml(estimatedArrivalText(alert.responderEtaMinutes))}</span>` : ""}</td>
         <td><span class="sos-status ${statusClass(alert.status)}">${escapeHtml(displayStatus(alert.status))}</span></td>
+        <td>${escapeHtml(alert.responderStatus ? normalizedStatus(alert.responderStatus) : "—")}</td>
+        <td class="max-w-sm whitespace-normal">${escapeHtml(resolutionReportText(alert))}</td>
       </tr>`).join("")
-    : '<tr><td colspan="7" class="t-muted">No alerts match these filters.</td></tr>';
+    : '<tr><td colspan="9" class="t-muted">No alerts match these filters.</td></tr>';
 }
 
 function renderAll() {
@@ -629,8 +658,10 @@ function renderSelectedAlert(alert) {
     <div><span>Reported</span><strong>${escapeHtml(dateText(alert.timestamp))}</strong></div>
     <div><span>Emergency details</span><strong>${escapeHtml(alert.description || alert.message || alert.note || alert.details || "No additional details provided.")}</strong></div>
     <div><span>Status</span><strong class="sos-status ${statusClass(alert.status)}">${escapeHtml(displayStatus(alert.status))}</strong></div>
+    <div><span>Responder status</span><strong>${escapeHtml(alert.responderStatus ? normalizedStatus(alert.responderStatus) : "—")}</strong></div>
     <div><span>Responder</span><strong>${escapeHtml(alert.responderName || "Not assigned")}</strong></div>
-    <div><span>Estimated arrival</span><strong>${escapeHtml(alert.responderName ? estimatedArrivalText(alert.responderEtaMinutes) : "Not assigned")}</strong></div>`;
+    <div><span>Estimated arrival</span><strong>${escapeHtml(alert.responderName ? estimatedArrivalText(alert.responderEtaMinutes) : "Not assigned")}</strong></div>
+    <div><span>Resolution report</span><strong>${escapeHtml(resolutionReportText(alert))}</strong></div>`;
   byId("sos-responder-live").textContent = alert.responderName
     ? `Assigned responder: ${alert.responderName}${alert.responderPhone ? ` · ${alert.responderPhone}` : ""} · Estimated arrival: ${estimatedArrivalText(alert.responderEtaMinutes)}${alert.responderLocationUpdatedAt ? ` · Location updated ${dateText(alert.responderLocationUpdatedAt)}` : ""}`
     : "No responder assigned yet.";
@@ -639,8 +670,10 @@ function renderSelectedAlert(alert) {
   actions.replaceChildren();
   byId("sos-dispatch-form").hidden = true;
   if (alert.status === "Pending") {
-    addAction(actions, "Dispatch nearest", "btn btn-primary", () => dispatchNearest(alert.id));
-    addAction(actions, "Choose responder", "btn", () => startDispatch(alert));
+    if (!alert.assignedResponderId) {
+      addAction(actions, "Assign nearest", "btn btn-primary", () => dispatchNearest(alert.id));
+      addAction(actions, "Assign responder", "btn", () => startDispatch(alert));
+    }
     addAction(actions, "Cancel SOS", "btn btn-danger-ghost", () => changeStatus(alert, "Declined"));
   } else if (alert.status === "Accepted") {
     addAction(actions, "Mark Responding / En route", "btn btn-primary", () => changeStatus(alert, "Responding"));
@@ -756,6 +789,10 @@ async function dispatchToResponder(alert, responder) {
     toast("This alert is no longer pending or is already being dispatched.", true);
     return;
   }
+  if (alert.assignedResponderId) {
+    toast("This alert already has an assigned responder.", true);
+    return;
+  }
   dispatchingAlertIds.add(alert.id);
   try {
     const selectedResponder = {
@@ -775,20 +812,22 @@ async function dispatchToResponder(alert, responder) {
     } else {
       await dashboard.acceptAndDispatchAlert(alert.sourceRecordId, selectedResponder);
     }
-    window.safepaterosMarkResponderResponding?.(responder.id, addressOf(alert));
     Object.assign(alert, {
-      status: "Accepted",
+      status: alert.sourceTable === "alerts" ? "Pending" : "Accepted",
       assignedResponderId: responder.id,
+      responderStatus: alert.sourceTable === "alerts" ? "pending_acceptance" : "accepted",
       responderName: responder.name,
       responderPhone: responder.phone,
       responderUnit: responder.unit,
       responderSpecialty: responder.specialty,
       responderEtaMinutes: responder.etaMinutes,
-      acceptedAt: Date.now(),
+      ...(alert.sourceTable === "alerts" ? {} : { acceptedAt: Date.now() }),
     });
     byId("sos-dispatch-form").hidden = true;
     renderAll();
-    toast(`${responder.name} dispatched. You can now mark the incident resolved.`);
+    toast(alert.sourceTable === "alerts"
+      ? `${responder.name} assigned. Waiting for responder acceptance.`
+      : `${responder.name} dispatched. You can now mark the incident resolved.`);
   } catch (error) {
     console.error("SOS dispatch could not be saved.", error);
     toast(`Dispatch failed: ${error.message || "Supabase update failed"}`, true);

@@ -514,6 +514,35 @@ function profileValue(profile, keys) {
   return "";
 }
 
+function profileField(profile, keys) {
+  if (!profile || typeof profile !== "object") return undefined;
+  for (const [key, value] of Object.entries(profile)) {
+    if (keys.includes(key)) return value;
+  }
+  for (const [key, value] of Object.entries(profile)) {
+    if (/password|token|secret|credential/i.test(key) || !value || typeof value !== "object") continue;
+    const match = profileField(value, keys);
+    if (match !== undefined) return match;
+  }
+  return undefined;
+}
+
+function profileTimestamp(value) {
+  if (value && typeof value.toMillis === "function") return value.toMillis();
+  if (value && typeof value.toDate === "function") return value.toDate().getTime();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.abs(value) < 1e12 ? value * 1000 : value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return Math.abs(numeric) < 1e12 ? numeric * 1000 : numeric;
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function staffResponderFromProfile(profile) {
   const id = `STAFF-${profile.id}`;
   const previous = state.responders.find((responder) => responder.id === id);
@@ -532,8 +561,58 @@ function staffResponderFromProfile(profile) {
   ]) || (previous && previous.location) || "Location unavailable";
   const latitude = profileValue(profile, ["lat", "latitude"]);
   const longitude = profileValue(profile, ["lng", "longitude"]);
-  const lat = latitude ? Number(latitude) : NaN;
-  const lng = longitude ? Number(longitude) : NaN;
+  const directPosition = locationFromRecord(profile);
+  const livePosition =
+    locationFromRecord(profileField(profile, ["current_location", "currentLocation", "live_location", "liveLocation"])) ||
+    directPosition;
+  const lastKnownPosition =
+    locationFromRecord(profileField(profile, ["last_known_location", "lastKnownLocation", "last_location", "lastLocation"])) ||
+    directPosition;
+  const onlineValue = profileField(profile, ["is_online", "isOnline", "online"]);
+  const normalizedOnline = String(onlineValue ?? "").trim().toLowerCase();
+  const explicitOnline = typeof onlineValue === "boolean"
+    ? onlineValue
+    : ["true", "1", "online", "active", "connected"].includes(normalizedOnline)
+      ? true
+      : ["false", "0", "offline", "inactive", "disconnected"].includes(normalizedOnline)
+        ? false
+        : null;
+  const lastSeenAt = profileTimestamp(profileField(profile, [
+    "last_seen_at",
+    "lastSeenAt",
+    "last_seen",
+    "lastSeen",
+    "heartbeat_at",
+    "heartbeatAt",
+    "last_heartbeat_at",
+    "lastHeartbeatAt",
+  ]));
+  const lastSeenAge = lastSeenAt === null ? null : Date.now() - lastSeenAt;
+  const isOnline = explicitOnline === false
+    ? false
+    : lastSeenAge !== null
+      ? lastSeenAge >= -30000 && lastSeenAge <= 120000
+      : explicitOnline === true;
+  const dutyValueRaw = profileField(profile, [
+    "is_on_duty",
+    "isOnDuty",
+    "on_duty",
+    "onDuty",
+    "is_on_shift",
+    "isOnShift",
+    "shift_status",
+    "shiftStatus",
+    "duty_status",
+    "dutyStatus",
+  ]);
+  const normalizedDuty = String(dutyValueRaw ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const explicitOnDuty = typeof dutyValueRaw === "boolean"
+    ? dutyValueRaw
+    : ["true", "1", "on_duty", "on_shift", "available", "active", "responding"].includes(normalizedDuty)
+      ? true
+      : ["false", "0", "off_duty", "off_shift", "inactive", "unavailable"].includes(normalizedDuty)
+        ? false
+        : null;
   const profileAssignment = profileValue(profile, [
     "assignedAlertId",
     "activeAlertId",
@@ -574,15 +653,20 @@ function staffResponderFromProfile(profile) {
     "off shift",
     "not on duty",
   ].includes(dutyValue);
-  const hasDutyState = Boolean(dutyValue);
   const responding =
     Boolean(assignedAlert || hasProfileAssignment) ||
     ["responding", "assigned", "busy", "en route", "in progress"].includes(dutyValue);
+  const isOnDuty = explicitOnDuty ?? (!offDuty && Boolean(dutyValue));
   const status = responding
     ? "responding"
-    : hasDutyState
-      ? offDuty ? "offline" : "available"
-      : previous?.status === "offline" ? "offline" : "available";
+    : isOnline && isOnDuty
+      ? "available"
+      : "offline";
+  const position = isOnline && isOnDuty
+    ? livePosition || lastKnownPosition
+    : lastKnownPosition || livePosition;
+  const lat = position?.lat ?? (latitude ? Number(latitude) : NaN);
+  const lng = position?.lng ?? (longitude ? Number(longitude) : NaN);
 
   return {
     ...(previous || {}),
@@ -593,6 +677,9 @@ function staffResponderFromProfile(profile) {
     email,
     role,
     status,
+    isOnline,
+    isOnDuty,
+    lastSeenAt,
     location: status === "responding" && previous ? previous.location : location,
     lat: Number.isFinite(lat) && lat >= -90 && lat <= 90
       ? lat
@@ -1167,8 +1254,10 @@ function pinHTML(kind, item) {
   }
   if (kind === "user")
     return `<span class="pin pin-user ${item.online ? "is-online" : "is-offline"}"><i data-lucide="map-pin"></i><span class="pin-tag">${esc(item.name)}</span></span>`;
-  const cls =
-    item.status === "offline" ? "is-offline" : item.status === "responding" ? "is-busy" : "";
+  const hasPresence = typeof item.isOnline === "boolean" || typeof item.isOnDuty === "boolean";
+  const cls = hasPresence
+    ? item.isOnline && item.isOnDuty ? "is-online" : "is-offline"
+    : item.status === "offline" ? "is-offline" : item.status === "responding" ? "is-busy" : "";
   return `<span class="pin pin-resp ${cls}">${esc(item.initials)}<span class="pin-tag">${esc(item.name)}</span></span>`;
 }
 const pinLabel = (kind, item) =>
@@ -1180,7 +1269,11 @@ const pinLabel = (kind, item) =>
     ? `${item.supabaseRequest || item.supabaseAlert || item.supabaseIncident ? `SOS from ${item.userName || "registered user"}: ` : ""}${item.title}: ${item.location} (${ALERT_STATUS[item.status].label})${item.userRole ? ` · ${item.userRole}` : ""}${item.displayTime ? ` · Reported ${item.displayTime}` : item.createdAt ? ` · Reported ${fmtDateTime(item.createdAt)}` : ""}`
     : kind === "user"
     ? `Registered user ${item.name}, ${item.online ? "online" : "offline"}`
-    : `Responder ${item.name}: ${item.location} (${RESPONDER_STATUS[item.status].label})`;
+    : `Responder ${item.name}: ${item.location} (${RESPONDER_STATUS[item.status].label})${
+        item.isOnline === false || item.isOnDuty === false
+          ? ` · Last seen ${item.lastSeenAt ? fmtDateTime(item.lastSeenAt) : "time unavailable"}`
+          : ""
+      }`;
 
 const SPAN = { lat: 0.003, lng: 0.0044 }; // area covered by the simulated map
 function project(item) {
@@ -2092,7 +2185,12 @@ function formatAlertFromSupabase(record) {
     resolvedAt: record.resolved_at || record.resolvedAt
       ? timestampMillisFromRecord(record.resolved_at || record.resolvedAt)
       : null,
-    responderId: String(record.responder_id || record.assignedResponderId || ""),
+    responderId: String(
+      record.responder_id ||
+      record.assigned_responder_id ||
+      record.assignedResponderId ||
+      ""
+    ),
     responderName: String(record.responder_name || record.responderName || ""),
     responderLatitude: Number(record.responder_latitude ?? record.responderLatitude),
     responderLongitude: Number(record.responder_longitude ?? record.responderLongitude),

@@ -612,7 +612,7 @@ function alertStatusForStorage(status) {
   })[status] || String(status).trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
-async function updateAlertRow(alertId, updates, expectedStatuses) {
+async function updateAlertRow(alertId, updates, expectedStatuses, requiredFields = []) {
   await requireAdminSession();
   const db = client();
   const { data: current, error: readError } = await db
@@ -628,12 +628,31 @@ async function updateAlertRow(alertId, updates, expectedStatuses) {
         : "The alert no longer exists."
     );
   }
+  const missingFields = requiredFields.filter((field) =>
+    !Object.hasOwn(current, field)
+  );
+  if (missingFields.length) {
+    throw new Error(
+      `Cannot assign this responder: the alerts table is missing required column${missingFields.length === 1 ? "" : "s"} ${missingFields.join(", ")}.`
+    );
+  }
+  if (
+    requiredFields.includes("assigned_responder_id") &&
+    current.assigned_responder_id
+  ) {
+    throw new Error("This alert already has an assigned responder.");
+  }
   const supportedUpdates = Object.fromEntries(
     Object.entries(updates).filter(([field]) => Object.hasOwn(current, field))
   );
 
   let query = db.from("alerts").update(supportedUpdates).eq("id", alertId);
   if (expectedStatuses?.length) query = query.in("status", expectedStatuses);
+  if (requiredFields.includes("assigned_responder_id")) {
+    query = current.assigned_responder_id == null
+      ? query.is("assigned_responder_id", null)
+      : query.eq("assigned_responder_id", current.assigned_responder_id);
+  }
 
   const { data, error } = await query.select("id");
   if (error) throw error;
@@ -647,11 +666,11 @@ async function updateAlertRow(alertId, updates, expectedStatuses) {
 }
 
 async function dispatchAlert(alertId, responder) {
-  const now = new Date().toISOString();
   await updateAlertRow(
     alertId,
     {
-      status: "dispatched",
+      assigned_responder_id: responder.id,
+      responder_status: "pending_acceptance",
       responder_id: responder.id,
       responder_name: responder.name,
       responder_phone: responder.phone,
@@ -659,10 +678,9 @@ async function dispatchAlert(alertId, responder) {
       responder_specialty: responder.specialty,
       responder_eta_minutes: responder.etaMinutes,
       admin_note: responder.adminNote || null,
-      accepted_at: now,
-      dispatched_at: now,
     },
-    ["pending", "active", "new", "unhandled"]
+    ["pending", "active", "new", "unhandled"],
+    ["assigned_responder_id", "responder_status"]
   );
 }
 

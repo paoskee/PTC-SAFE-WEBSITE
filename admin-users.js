@@ -113,10 +113,63 @@ function coordinates(value) {
     : null;
 }
 
+function profilePresence(user) {
+  const onlineValue = findField(user, ["is_online", "isOnline", "online"]);
+  const seenAt = timestampMillis(findField(user, [
+    "last_seen_at",
+    "lastSeenAt",
+    "last_seen",
+    "lastSeen",
+    "heartbeat_at",
+    "heartbeatAt",
+    "last_heartbeat_at",
+    "lastHeartbeatAt",
+  ]));
+  const normalizedOnline = String(onlineValue ?? "").trim().toLowerCase();
+  const explicitOnline = typeof onlineValue === "boolean"
+    ? onlineValue
+    : ["true", "1", "online", "active", "connected"].includes(normalizedOnline)
+      ? true
+      : ["false", "0", "offline", "inactive", "disconnected"].includes(normalizedOnline)
+        ? false
+        : null;
+  const age = seenAt === null ? null : Date.now() - seenAt;
+  const online = explicitOnline === false
+    ? false
+    : seenAt !== null
+      ? age >= -30000 && age <= 120000
+      : explicitOnline === true;
+
+  const dutyValue = findField(user, [
+    "is_on_duty",
+    "isOnDuty",
+    "on_duty",
+    "onDuty",
+    "is_on_shift",
+    "isOnShift",
+    "shift_status",
+    "shiftStatus",
+    "duty_status",
+    "dutyStatus",
+  ]);
+  const normalizedDuty = String(dutyValue ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const onDuty = typeof dutyValue === "boolean"
+    ? dutyValue
+    : ["true", "1", "on_duty", "on_shift", "available", "active"].includes(normalizedDuty)
+      ? true
+      : ["false", "0", "off_duty", "off_shift", "inactive", "unavailable"].includes(normalizedDuty)
+        ? false
+        : null;
+  return { online, onDuty, lastSeen: seenAt };
+}
+
 function profileLocation(user) {
   const locationKeys = [
+    "last_known_location",
     "lastKnownLocation",
+    "last_location",
     "lastLocation",
+    "current_location",
     "currentLocation",
     "userLocation",
     "location",
@@ -193,12 +246,26 @@ function onlineState(user) {
 }
 
 function locationForUser(user) {
-  const profile = profileLocation(user);
+  const presence = profilePresence(user);
+  const liveLocation = coordinates(user.current_location) ||
+    coordinates(user.currentLocation) ||
+    coordinates(user.location) ||
+    coordinates(user);
+  const lastKnownLocation = coordinates(user.last_known_location) ||
+    coordinates(user.lastKnownLocation) ||
+    coordinates(user.last_location) ||
+    coordinates(user.lastLocation);
+  const profile = presence.online && presence.onDuty === true
+    ? liveLocation || profileLocation(user)
+    : lastKnownLocation || profileLocation(user);
   const profileUpdatedAt = timestampMillis(
     findField(user, [
+      "location_updated_at",
       "locationUpdatedAt",
+      "last_location_updated_at",
       "lastLocationUpdatedAt",
       "locationTimestamp",
+      "last_seen_at",
       "lastSeen",
       "updatedAt",
     ])
@@ -430,6 +497,36 @@ function closeUserDetails() {
 }
 
 function initializeUsers() {
+  let lastResponderMapSignature = "";
+  const publishResponderProfiles = (force = false) => {
+    const responderProfiles = users.filter((user) =>
+      isActiveUser(user) && userCategory(user) === "staff"
+    );
+    const studentCount = activeUsers().filter((user) =>
+      userCategory(user) === "student"
+    ).length;
+    const signature = JSON.stringify([
+      responderProfiles.map((user) => {
+        const presence = profilePresence(user);
+        const location = profileLocation(user);
+        return [
+          user.id,
+          presence.online,
+          presence.onDuty,
+          presence.lastSeen,
+          location?.lat,
+          location?.lng,
+        ];
+      }),
+      studentCount,
+    ]);
+    if (!force && signature === lastResponderMapSignature) return;
+    lastResponderMapSignature = signature;
+    window.dispatchEvent(new CustomEvent("safepateros:users-updated", {
+      detail: { users: responderProfiles, studentCount },
+    }));
+  };
+
   byId("users-search").addEventListener("input", renderUsers);
   document.querySelectorAll("[data-user-category]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -454,7 +551,9 @@ function initializeUsers() {
           lat: location.lat,
           lng: location.lng,
           online: presence.online,
+          onDuty: profilePresence(user).onDuty,
           updatedAt: location.updatedAt,
+          lastSeenAt: profilePresence(user).lastSeen,
           source: location.source,
         },
       }));
@@ -466,7 +565,10 @@ function initializeUsers() {
     if (user) renderUserDetails(user);
   });
   byId("user-detail-close").addEventListener("click", closeUserDetails);
-  window.setInterval(refreshPresenceBadges, 30000);
+  window.setInterval(() => {
+    refreshPresenceBadges();
+    publishResponderProfiles();
+  }, 30000);
   const updateSosLocations = () => {
     refreshSosLocations(sosRequests, sosAlerts);
     renderUsers();
@@ -491,12 +593,7 @@ function initializeUsers() {
         users = nextUsers;
         byId("users-feed-status").textContent = "Live profiles from Supabase";
         renderUsers();
-        window.dispatchEvent(new CustomEvent("safepateros:users-updated", {
-          detail: {
-            users: nextUsers.filter((user) => isActiveUser(user) && userCategory(user) === "staff"),
-            studentCount: activeUsers().filter((user) => userCategory(user) === "student").length,
-          },
-        }));
+        publishResponderProfiles(true);
       },
       (error) => {
         console.error("AlertNest user profiles could not be loaded.", error);

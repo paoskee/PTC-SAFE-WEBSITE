@@ -622,6 +622,9 @@ button.stat-card:hover {
   font-size: 0.6rem;
   background: #2563eb;
 }
+.pin-resp.is-online {
+  background: #16a34a;
+}
 .pin-resp.is-busy {
   background: #7c3aed;
 }
