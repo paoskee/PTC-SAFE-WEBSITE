@@ -323,9 +323,18 @@ function distanceM(a, b) {
 const etaMin = (m) => Math.max(1, Math.round(m / WALK_M_PER_MIN));
 
 // Available responders, closest first (responders without a position go last)
+function isResponderAvailableForAssignment(responder) {
+  return responder.status === "available" &&
+    !state.alerts.some(
+      (alert) =>
+        isActive(alert) &&
+        String(alert.responderId || "") === String(responder.id)
+    );
+}
+
 function availableByDistance(alert) {
   return state.responders
-    .filter((r) => r.status === "available")
+    .filter(isResponderAvailableForAssignment)
     .map((r) => ({
       r,
       dist: hasPos(r) && hasPos(alert) ? distanceM(r, alert) : null,
@@ -1965,7 +1974,13 @@ function formatEmergencyRequestFromSupabase(request) {
       (status === "resolved" || status === "cancelled") && request.updatedAt
         ? timestampMillisFromRecord(request.updatedAt)
         : null,
-    responderId: String(responderInfo.unit || ""),
+    responderId: String(
+      responderInfo.unit ||
+      responderInfo.id ||
+      request.responder_id ||
+      request.responderId ||
+      ""
+    ),
   };
 
   return { id: request.id, status: ({
@@ -2440,6 +2455,10 @@ function receiveAlert(data, { manual = false } = {}) {
 
 // --- Dispatch ---
 function assign(alert, responder) {
+  if (!isResponderAvailableForAssignment(responder)) {
+    notify(`${responder.name} is no longer available for assignment.`, "error");
+    return;
+  }
   alert.status = "responding";
   alert.responderId = responder.id;
   alert.dispatchedAt = Date.now();
@@ -2471,7 +2490,7 @@ function dispatchAlert(alertId, responderId = null) {
     const responder = responderId
       ? findResponder(responderId)
       : (availableByDistance(alert)[0] || {}).r;
-    if (!responder || responder.status !== "available") {
+    if (!responder || !isResponderAvailableForAssignment(responder)) {
       return notify("No responders are available right now", "error");
     }
     const table = alert.supabaseIncident ? "incidents" : "alerts";
@@ -2496,7 +2515,7 @@ function dispatchAlert(alertId, responderId = null) {
   const responder = responderId
     ? findResponder(responderId)
     : (availableByDistance(alert)[0] || {}).r;
-  if (!responder || responder.status !== "available")
+  if (!responder || !isResponderAvailableForAssignment(responder))
     return notify("No responders are available right now", "error");
   if (alert.supabaseRequest) {
     void commitEmergencyAcceptance(alert.supabaseRecordId, {
@@ -2511,7 +2530,7 @@ function dispatchAlert(alertId, responderId = null) {
 
 function dispatchResponder(responderId) {
   const responder = findResponder(responderId);
-  if (!responder || responder.status !== "available") return;
+  if (!responder || !isResponderAvailableForAssignment(responder)) return;
   const waiting = sortedActive().filter((a) => a.status === "unassigned");
   if (!waiting.length)
     return notify("No alerts are waiting for a responder", "info");
@@ -3469,9 +3488,12 @@ function openAssignModal(alertId) {
                 'input[name="assign-resp"]:checked'
               );
               if (!pick) return false;
+              const responder = findResponder(pick.value);
+              if (!responder || !isResponderAvailableForAssignment(responder)) {
+                notify("This responder is no longer available for assignment.", "error");
+                return false;
+              }
               if (a.supabaseRequest) {
-                const responder = findResponder(pick.value);
-                if (!responder) return false;
                 void commitEmergencyAcceptance(a.supabaseRecordId, {
                   name: responder.name,
                   phone: responder.phone,

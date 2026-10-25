@@ -471,6 +471,14 @@ function renderHistory() {
   byId("alertnest-classify-selected").disabled = selectedHistoryIds.size === 0;
   byId("alertnest-export-selected").disabled = selectedHistoryIds.size === 0;
   byId("alertnest-delete-selected").disabled = selectedHistoryIds.size === 0;
+  const selectAll = byId("alertnest-history-select-all");
+  const selectedVisibleCount = rows.filter((alert) =>
+    selectedHistoryIds.has(alert.id)
+  ).length;
+  selectAll.checked = rows.length > 0 && selectedVisibleCount === rows.length;
+  selectAll.indeterminate =
+    selectedVisibleCount > 0 && selectedVisibleCount < rows.length;
+  selectAll.disabled = rows.length === 0;
   byId("alertnest-history-body").innerHTML = rows.length
     ? rows.map((alert) => `
       <tr class="sos-history-row">
@@ -735,6 +743,13 @@ async function handleDispatchSubmit(event) {
 async function dispatchToResponder(alert, responder) {
   if (!dashboard) {
     toast("Supabase is not connected. The SOS was not dispatched.", true);
+    return;
+  }
+  const availableResponder = getAvailableResponders(alert).find(
+    (item) => item.id === responder.id
+  );
+  if (!availableResponder) {
+    toast("This responder is no longer available for assignment.", true);
     return;
   }
   if (alert.status !== "Pending" || dispatchingAlertIds.has(alert.id)) {
@@ -1010,7 +1025,16 @@ function setupControls() {
     const detailButton = event.target.closest("[data-open-alert]");
     if (detailButton) openAlert(detailButton.dataset.openAlert);
   });
-  byId("alertnest-history-body").addEventListener("click", (event) => {
+  byId("alertnest-history-select-all").addEventListener("change", (event) => {
+    const visibleAlerts = filteredAlerts();
+    if (event.target.checked) {
+      visibleAlerts.forEach((alert) => selectedHistoryIds.add(alert.id));
+    } else {
+      visibleAlerts.forEach((alert) => selectedHistoryIds.delete(alert.id));
+    }
+    renderHistory();
+  });
+  byId("alertnest-history-body").addEventListener("change", (event) => {
     const checkbox = event.target.closest("[data-select-alert]");
     if (!checkbox) return;
     if (checkbox.checked) selectedHistoryIds.add(checkbox.dataset.selectAlert);

@@ -85,8 +85,14 @@ function timestampMillis(value) {
   if (value && typeof value.toMillis === "function") return value.toMillis();
   if (value && typeof value.toDate === "function") return value.toDate().getTime();
   if (value instanceof Date) return value.getTime();
-  if (typeof value === "number") return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.abs(value) < 1e12 ? value * 1000 : value;
+  }
   if (typeof value === "string") {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && value.trim()) {
+      return Math.abs(numeric) < 1e12 ? numeric * 1000 : numeric;
+    }
     const parsed = Date.parse(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
@@ -135,35 +141,53 @@ function profileLocation(user) {
 function onlineState(user) {
   const value = findField(user, [
     "isOnline",
+    "is_online",
     "online",
     "connected",
     "onlineStatus",
+    "online_status",
     "presenceStatus",
+    "presence_status",
     "connectionState",
+    "connection_state",
   ]) ?? user.presence?.status ??
     (["online", "offline"].includes(String(user.status || "").toLowerCase())
       ? user.status
       : undefined);
+  const normalizedValue = String(value ?? "").trim().toLowerCase();
   const explicit = typeof value === "boolean"
     ? value
-    : typeof value === "string"
-      ? ["true", "1", "online"].includes(value.toLowerCase())
-      : null;
+    : ["true", "1", "online", "connected", "active"].includes(normalizedValue)
+      ? true
+      : ["false", "0", "offline", "disconnected", "inactive"].includes(normalizedValue)
+        ? false
+        : null;
   const lastSeen = timestampMillis(
     findField(user, [
       "lastSeen",
+      "last_seen",
       "lastSeenAt",
+      "last_seen_at",
       "lastActiveAt",
+      "last_active_at",
       "lastActivityAt",
+      "last_activity_at",
       "lastOnlineAt",
+      "last_online_at",
       "heartbeatAt",
+      "heartbeat_at",
+      "lastHeartbeatAt",
+      "last_heartbeat_at",
     ])
   );
-  const recentlySeen = lastSeen !== null && Date.now() - lastSeen <= 120000;
+  const age = lastSeen === null ? null : Date.now() - lastSeen;
+  const recentlySeen = age !== null && age >= -30000 && age <= 120000;
   return {
-    online: explicit === false || (lastSeen !== null && !recentlySeen)
+    online: explicit === false
       ? false
-      : explicit === true || recentlySeen,
+      : lastSeen !== null
+        ? recentlySeen
+        : explicit === true,
     lastSeen,
   };
 }
