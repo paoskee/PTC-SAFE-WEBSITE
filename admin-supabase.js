@@ -55,6 +55,7 @@ async function initializeDashboardSupabase() {
             subscribeToSOSRecords: service.subscribeToSOSRecords,
             subscribeToIncidents: service.subscribeToIncidents,
             subscribeToUsers: service.subscribeToUsers,
+            refreshDashboardData: service.refreshDashboardData,
             getActiveAlerts: service.getActiveAlerts,
             getStaffResponders: service.getStaffResponders,
             acceptAndDispatchAlert: service.acceptAndDispatchAlert,

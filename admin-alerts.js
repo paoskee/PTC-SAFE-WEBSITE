@@ -1120,6 +1120,17 @@ function initializeAlertFeed() {
       }
     );
   });
+  window.addEventListener("safepateros:sos-records-refreshed", (event) => {
+    alerts = (event.detail || [])
+      .map(normalizeSOSRecord)
+      .sort((first, second) =>
+        (timestampMillis(second.timestamp) || 0) -
+        (timestampMillis(first.timestamp) || 0)
+      );
+    previousStatuses = new Map(alerts.map((alert) => [alert.id, alert.status]));
+    firstSnapshot = false;
+    renderAll();
+  });
   window.addEventListener("safepateros:supabase-error", (event) => {
     byId("alertnest-feed-status").textContent = event.detail?.message || "Supabase initialization failed.";
   });

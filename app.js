@@ -495,7 +495,7 @@ function profileValue(profile, keys) {
   for (const key of keys) {
     const value = profile[key];
     if (typeof value === "string" && value.trim()) return value.trim();
-    if (typeof value === "number") return String(value);
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
   }
   for (const [key, value] of Object.entries(profile)) {
     if (/password|token|secret|credential/i.test(key) || !value || typeof value !== "object") continue;
@@ -525,9 +525,55 @@ function staffResponderFromProfile(profile) {
   const longitude = profileValue(profile, ["lng", "longitude"]);
   const lat = latitude ? Number(latitude) : NaN;
   const lng = longitude ? Number(longitude) : NaN;
-  const status = previous && RESPONDER_STATUS[previous.status]
-    ? previous.status
-    : "available";
+  const profileAssignment = profileValue(profile, [
+    "assignedAlertId",
+    "activeAlertId",
+    "assignedIncidentId",
+    "currentAssignment",
+    "assignmentId",
+  ]);
+  const hasProfileAssignment =
+    Boolean(profileAssignment) &&
+    !["false", "0", "none", "null", "undefined"].includes(
+      profileAssignment.toLowerCase()
+    );
+  const assignedAlert = state.alerts.find(
+    (alert) => isActive(alert) && String(alert.responderId || "") === id
+  );
+  const dutyValue = profileValue(profile, [
+    "shiftStatus",
+    "shift_status",
+    "dutyStatus",
+    "duty_status",
+    "isOnDuty",
+    "onDuty",
+    "isOnShift",
+    "onShift",
+    "workStatus",
+    "available",
+    "availability",
+  ]).toLowerCase().replace(/[_-]+/g, " ");
+  const offDuty = [
+    "false",
+    "0",
+    "off",
+    "off duty",
+    "offline",
+    "inactive",
+    "unavailable",
+    "not available",
+    "off shift",
+    "not on duty",
+  ].includes(dutyValue);
+  const hasDutyState = Boolean(dutyValue);
+  const responding =
+    Boolean(assignedAlert || hasProfileAssignment) ||
+    ["responding", "assigned", "busy", "en route", "in progress"].includes(dutyValue);
+  const status = responding
+    ? "responding"
+    : hasDutyState
+      ? offDuty ? "offline" : "available"
+      : previous?.status === "offline" ? "offline" : "available";
 
   return {
     ...(previous || {}),
@@ -569,7 +615,7 @@ const ui = {
   alertFilter: "active",
   alertQuery: "",
   incStatus: "all",
-  incType: "all",
+  incTypes: Object.keys(TYPE_META),
   incQuery: "",
   respQuery: "",
   respStatus: "all",
@@ -1012,7 +1058,7 @@ function updateMapPin(id, longitude, latitude, role, popupInfo = {}) {
   return true;
 }
 
-function flyToLocation(longitude, latitude, zoom = 16) {
+function flyToLocation(longitude, latitude, zoom = 16, view = "map") {
   if (
     !Number.isFinite(longitude) ||
     longitude < -180 ||
@@ -1025,7 +1071,7 @@ function flyToLocation(longitude, latitude, zoom = 16) {
     return;
   }
   pendingRealtimeMapLocation = { longitude, latitude, zoom };
-  navigate("map");
+  navigate(view);
   requestAnimationFrame(flyToPendingRealtimeLocation);
 }
 
@@ -1081,8 +1127,9 @@ function handleRealtimeSOS(alerts, { notifyUser = true } = {}) {
   const located = alerts.filter(hasPos);
   if (located.length) {
     const latestAlert = located[located.length - 1];
-    flyToLocation(latestAlert.lng, latestAlert.lat, 16);
+    flyToLocation(latestAlert.lng, latestAlert.lat, 16, "dashboard");
   } else {
+    navigate("dashboard");
     console.warn("New realtime SOS alert has no valid coordinates.", alerts);
   }
   if (notifyUser) {
@@ -1497,7 +1544,7 @@ function filteredIncidents() {
     .filter(
       (a) =>
         (ui.incStatus === "all" || a.status === ui.incStatus) &&
-        (ui.incType === "all" || a.type === ui.incType) &&
+        ui.incTypes.includes(a.type) &&
         matchesQuery(a, ui.incQuery)
     )
     .sort((a, b) => b.createdAt - a.createdAt);
@@ -1569,13 +1616,7 @@ function responderRowHTML(r, full) {
     : r.email
     ? `<a href="mailto:${esc(r.email)}" class="text-xs t-muted hover:underline">${esc(r.email)}</a>`
     : '<span class="text-xs t-muted">Contact unavailable</span>';
-  const statusControl = full && r.staffUser
-    ? `<select class="input text-xs py-1" data-responder-status data-id="${esc(r.id)}" aria-label="Status for ${esc(r.name)}" ${inc ? "disabled" : ""}>
-        <option value="available" ${r.status === "available" ? "selected" : ""}>Available</option>
-        <option value="responding" ${r.status === "responding" ? "selected" : ""}>Responding</option>
-        <option value="offline" ${r.status === "offline" ? "selected" : ""}>Off duty</option>
-      </select>`
-    : badge(st.badge, st.label);
+  const statusControl = badge(st.badge, st.label);
   const canDispatch =
     r.status === "available" &&
     state.alerts.some((a) => a.status === "unassigned");
@@ -2125,7 +2166,15 @@ function formatIncidentFromSupabase(record) {
     note: String(record.description || record.message || record.note || record.details || ""),
     createdAt,
     displayTime: record.displayTime || "",
-    responderId: "",
+    responderId: String(
+      record.responder_id ||
+      record.responderId ||
+      record.assigned_responder_id ||
+      record.assignedResponderId ||
+      record.assignedResponder?.id ||
+      record.assigned_responder?.id ||
+      ""
+    ),
   };
 }
 
@@ -2141,6 +2190,9 @@ function syncSupabaseAlerts({ renderDashboard = true } = {}) {
       !alert.supabaseAlert &&
       !alert.supabaseIncident
   ).concat(supabaseRecords);
+  if (registeredStaffProfiles.length) {
+    syncRegisteredStaff(registeredStaffProfiles);
+  }
   gFitted = false;
   if (renderDashboard) render();
 }
@@ -3817,6 +3869,54 @@ function renderLists() {
   icons();
 }
 
+async function refreshDashboardData() {
+  const buttons = [...document.querySelectorAll('[data-action="refresh-data"]')];
+  buttons.forEach((button) => {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+  });
+  try {
+    if (typeof supabaseDashboard?.refreshDashboardData !== "function") {
+      throw new Error("Supabase refresh is not available yet.");
+    }
+    const snapshot = await supabaseDashboard.refreshDashboardData();
+    supabaseEmergencyRequests = snapshot.emergencyRequests.map(
+      formatEmergencyRequestFromSupabase
+    );
+    supabaseAlertRecords = snapshot.alerts;
+    supabaseIncidentRecords = snapshot.incidents;
+    previousEmergencyRequestIds = new Set(
+      snapshot.emergencyRequests.map((record) => String(record.id))
+    );
+    previousAlertRecordIds = new Set(
+      snapshot.alerts.map((record) => String(record.id))
+    );
+    previousIncidentIds = new Set(
+      snapshot.incidents.map((record) => String(record.id))
+    );
+    window.dispatchEvent(new CustomEvent("safepateros:emergency-requests-updated", {
+      detail: snapshot.emergencyRequests,
+    }));
+    window.dispatchEvent(new CustomEvent("safepateros:alerts-updated", {
+      detail: snapshot.alerts,
+    }));
+    window.dispatchEvent(new CustomEvent("safepateros:sos-records-refreshed", {
+      detail: snapshot.sosRecords,
+    }));
+    syncSupabaseAlerts({ renderDashboard: false });
+    render();
+    notify("Dashboard data refreshed from Supabase.", "success");
+  } catch (error) {
+    console.error("Dashboard data could not be refreshed.", error);
+    notify(`Could not refresh dashboard data: ${error.message || "Supabase error"}`, "error");
+  } finally {
+    buttons.forEach((button) => {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+    });
+  }
+}
+
 /* ---------- 10. EVENT HANDLING ---------- */
 // One click listener for the whole page. Buttons declare what they do with data-action.
 const actions = {
@@ -3826,6 +3926,7 @@ const actions = {
   "zoom-out": () => zoomMap(-1),
   "map-fit": () => fitMap(),
   "map-center": () => centerOnSchool(),
+  "refresh-data": () => refreshDashboardData(),
   "toggle-layer": (el) => {
     ui.layers[el.dataset.layer] = !ui.layers[el.dataset.layer];
     document
@@ -3947,6 +4048,27 @@ document.addEventListener("click", (event) => {
 // Search boxes and filter dropdowns
 function onFieldChange(event) {
   const el = event.target;
+  if (event.type === "change" && el.matches("[data-incident-category]")) {
+    const categories = Object.keys(TYPE_META);
+    if (el.dataset.incidentCategory === "all") {
+      ui.incTypes = el.checked ? categories : [];
+    } else if (el.checked) {
+      ui.incTypes = [...new Set([...ui.incTypes, el.dataset.incidentCategory])];
+    } else {
+      ui.incTypes = ui.incTypes.filter(
+        (category) => category !== el.dataset.incidentCategory
+      );
+    }
+    const selectAll = document.querySelector('[data-incident-category="all"]');
+    selectAll.checked = ui.incTypes.length === categories.length;
+    document.querySelectorAll("[data-incident-category]").forEach((checkbox) => {
+      if (checkbox.dataset.incidentCategory !== "all") {
+        checkbox.checked = ui.incTypes.includes(checkbox.dataset.incidentCategory);
+      }
+    });
+    renderLists();
+    return;
+  }
   if (event.type === "change" && el.matches("[data-responder-status]")) {
     setResponderStatus(el.dataset.id, el.value);
     return;
@@ -4079,9 +4201,7 @@ window.addEventListener("safepateros:supabase-ready", (event) => {
         window.dispatchEvent(new CustomEvent("safepateros:emergency-requests-updated", {
           detail: requests,
         }));
-        syncSupabaseAlerts({
-          renderDashboard: !newAlerts.some(hasPos),
-        });
+        syncSupabaseAlerts();
         handleRealtimeSOS(newAlerts);
       },
       (error) => {
@@ -4112,9 +4232,7 @@ window.addEventListener("safepateros:supabase-ready", (event) => {
         window.dispatchEvent(new CustomEvent("safepateros:alerts-updated", {
           detail: records,
         }));
-        syncSupabaseAlerts({
-          renderDashboard: !newAlerts.some(hasPos),
-        });
+        syncSupabaseAlerts();
         handleRealtimeSOS(newAlerts, { notifyUser: false });
       },
       (error) => {
@@ -4135,9 +4253,7 @@ window.addEventListener("safepateros:supabase-ready", (event) => {
         const changes = collectNewActiveIncidents(records, previousIncidentIds);
         previousIncidentIds = changes.currentIds;
         supabaseIncidentRecords = records;
-        syncSupabaseAlerts({
-          renderDashboard: changes.inserted.length === 0,
-        });
+        syncSupabaseAlerts();
 
         const newIncidents = changes.inserted
           .map(formatIncidentFromSupabase)
@@ -4163,7 +4279,7 @@ window.addEventListener("safepateros:supabase-ready", (event) => {
               time: reportedAt,
             }
           );
-          flyToLocation(incident.lng, incident.lat, 16);
+          flyToLocation(incident.lng, incident.lat, 16, "dashboard");
         });
         if (newIncidents.length) {
           notify(

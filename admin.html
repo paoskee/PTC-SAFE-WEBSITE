@@ -368,7 +368,16 @@
                   </h2>
                   <span class="badge badge-ok">Live</span>
                 </div>
-                <div class="flex items-center gap-1">
+                <div class="flex flex-wrap items-center justify-end gap-1">
+                  <button
+                    data-action="refresh-data"
+                    class="btn btn-sm"
+                    type="button"
+                    aria-label="Refresh dashboard map and alerts"
+                  >
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    <span>Refresh</span>
+                  </button>
                   <button
                     data-action="map-center"
                     class="icon-btn"
@@ -403,7 +412,7 @@
               </div>
               <div
                 id="map-slot-dashboard"
-                class="relative flex-1 h-[26rem] lg:h-[30rem]"
+                class="relative flex-1 h-[22rem] sm:h-[26rem] lg:h-[30rem]"
               >
                 <!-- The single map element lives here (it moves to the Live map view when needed) -->
                 <div id="map-host" class="map-host">
@@ -493,9 +502,14 @@
                 <h2 id="alerts-title" class="card-title t-main">
                   Active alerts
                 </h2>
-                <button data-action="nav" data-view="alerts" class="btn btn-sm">
-                  View all
-                </button>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button data-action="refresh-data" class="btn btn-sm" type="button">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+                  </button>
+                  <button data-action="nav" data-view="alerts" class="btn btn-sm">
+                    View all
+                  </button>
+                </div>
               </div>
               <div
                 id="alerts-list"
@@ -628,7 +642,16 @@
                     Fire stations
                   </button>
                 </div>
-                <div class="flex items-center gap-1">
+                <div class="flex flex-wrap items-center justify-end gap-1">
+                  <button
+                    data-action="refresh-data"
+                    class="btn btn-sm"
+                    type="button"
+                    aria-label="Refresh live map and alerts"
+                  >
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    <span>Refresh</span>
+                  </button>
                   <button
                     data-action="map-center"
                     class="icon-btn"
@@ -663,7 +686,7 @@
               </div>
               <div
                 id="map-slot-live"
-                class="relative h-[60vh] min-h-[26rem]"
+                class="relative h-[55vh] min-h-[20rem] sm:min-h-[26rem]"
               ></div>
             </section>
 
@@ -715,10 +738,13 @@
                 Responding <span id="count-responding"></span>
               </button>
             </div>
-            <div class="flex items-center gap-2 w-full sm:w-auto">
+            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <button class="btn" data-action="refresh-data" type="button">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+              </button>
               <input
                 type="search"
-                class="input sm:w-64"
+                class="input w-full sm:w-64"
                 placeholder="Search by place, ID or type"
                 data-bind="alertQuery"
                 aria-label="Search active alerts"
@@ -750,17 +776,33 @@
               <option value="resolved">Resolved</option>
               <option value="false_alarm">False alarm</option>
             </select>
-            <select
-              class="input sm:w-40"
-              data-bind="incType"
-              aria-label="Filter by type"
-            >
-              <option value="all">All types</option>
-              <option value="medical">Medical</option>
-              <option value="fire">Fire</option>
-              <option value="security">Security</option>
-              <option value="other">Other</option>
-            </select>
+            <details class="incident-category-filter">
+              <summary class="btn" aria-label="Filter incident categories">
+                Categories
+              </summary>
+              <div class="incident-category-options surface">
+                <label>
+                  <input type="checkbox" data-incident-category="all" checked />
+                  <span>Select All</span>
+                </label>
+                <label>
+                  <input type="checkbox" data-incident-category="medical" checked />
+                  <span>Medical</span>
+                </label>
+                <label>
+                  <input type="checkbox" data-incident-category="fire" checked />
+                  <span>Fire</span>
+                </label>
+                <label>
+                  <input type="checkbox" data-incident-category="security" checked />
+                  <span>Security</span>
+                </label>
+                <label>
+                  <input type="checkbox" data-incident-category="other" checked />
+                  <span>Other</span>
+                </label>
+              </div>
+            </details>
             <input
               type="search"
               class="input sm:w-64"

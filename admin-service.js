@@ -511,6 +511,79 @@ export function subscribeToUsers(onUpdateCallback, onError) {
   );
 }
 
+export async function refreshDashboardData() {
+  const db = client();
+  const tables = ["emergency_requests", "alerts", "incidents"];
+  const loadTable = async (table) => {
+    const rows = [];
+    const pageSize = 1000;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await db
+        .from(table)
+        .select("*")
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      const page = data || [];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+    return documents(rows);
+  };
+  const tableRows = await Promise.all(tables.map(loadTable));
+
+  const recordsByTable = new Map(
+    tables.map((table, index) => [
+      table,
+      tableRows[index],
+    ])
+  );
+  const records = tables.flatMap((table) =>
+    recordsByTable.get(table).map((record) => ({
+      ...record,
+      _sourceTable: table,
+    }))
+  );
+  const userIds = [...new Set(
+    records
+      .map((record) => record.user_id || record.userId || record.uid)
+      .filter(Boolean)
+      .map(String)
+  )];
+  let profiles = new Map();
+  if (userIds.length) {
+    const { data, error } = await db
+      .from("users")
+      .select("*")
+      .in("id", userIds);
+    if (error) throw error;
+    profiles = new Map((data || []).map((row) => [
+      String(row.id),
+      publicUserProfile(row),
+    ]));
+  }
+
+  const enrich = (record) => {
+    const userId = String(record.user_id || record.userId || record.uid || "");
+    const profile =
+      profiles.get(userId) ||
+      record.userProfile ||
+      record.userInfo ||
+      null;
+    return {
+      ...record,
+      user_id: userId,
+      userProfile: profile,
+      ...(record._sourceTable === "incidents" ? { users: profile } : {}),
+    };
+  };
+  return {
+    emergencyRequests: recordsByTable.get("emergency_requests").map(enrich),
+    alerts: recordsByTable.get("alerts").map(enrich),
+    incidents: recordsByTable.get("incidents").map(enrich),
+    sosRecords: records.map(enrich),
+  };
+}
+
 export async function getStaffResponders() {
   const { data, error } = await client().from("users").select("id,data");
   if (error) throw error;
