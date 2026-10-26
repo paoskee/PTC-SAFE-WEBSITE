@@ -786,7 +786,9 @@ export async function updateSOSRecordStatus(table, recordId, status) {
   const patch = { status };
   if (status === "Resolved") patch.resolvedAt = new Date().toISOString();
   if (status === "Declined" || status === "False Alarm") {
-    patch.cancelledAt = new Date().toISOString();
+    const now = new Date().toISOString();
+    patch.cancelledAt = now;
+    patch.updatedAt = now;
   }
   await updateSOSRecord(table, recordId, patch);
 }
@@ -941,13 +943,7 @@ export async function sendBroadcast({
 
   const payload = {
     id: String(row.id),
-    title,
-    message,
-    severity,
-    audience,
-    ...(building ? { building } : {}),
-    timestamp: sentAt,
-    sentBy: adminName,
+    ...data,
   };
   locallyPublishedBroadcastIds.add(payload.id);
   if (locallyPublishedBroadcastIds.size > 100) {

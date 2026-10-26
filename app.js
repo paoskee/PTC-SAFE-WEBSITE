@@ -1043,7 +1043,11 @@ function mapItems() {
     state.alerts
       .filter(
         (alert) =>
-          alert.supabaseRequest &&
+          (
+            alert.supabaseRequest ||
+            alert.supabaseAlert ||
+            alert.supabaseIncident
+          ) &&
           alert.status === "responding" &&
           hasPos(alert.responderLocation)
       )
@@ -1052,10 +1056,17 @@ function mapItems() {
           kind: "emergency-responder",
           item: {
             id: alert.id,
-            name: alert.responderInfo.name,
-            initials: initialsOf(alert.responderInfo.name),
+            name:
+              alert.responderInfo?.name ||
+              alert.responderName ||
+              "Assigned responder",
+            initials: initialsOf(
+              alert.responderInfo?.name ||
+                alert.responderName ||
+                "Responder"
+            ),
             status: "responding",
-            location: `Responding to ${alert.requestId}`,
+            location: `Responding to ${alert.requestId || alert.id}`,
             ...alert.responderLocation,
           },
         })
@@ -1320,7 +1331,10 @@ function renderMap() {
       state.alerts
         .filter(
           (a) =>
-            !a.supabaseRequest && a.status === "responding" && hasPos(a)
+            !a.supabaseRequest &&
+            !a.responderLocation &&
+            a.status === "responding" &&
+            hasPos(a)
         )
         .forEach((a) => {
           const r = findResponder(a.responderId);
@@ -1338,7 +1352,11 @@ function renderMap() {
       state.alerts
         .filter(
           (alert) =>
-            alert.supabaseRequest &&
+            (
+              alert.supabaseRequest ||
+              alert.supabaseAlert ||
+              alert.supabaseIncident
+            ) &&
             alert.status === "responding" &&
             hasPos(alert) &&
             hasPos(alert.responderLocation)
@@ -1943,6 +1961,16 @@ function locationFromRecord(value) {
     : null;
 }
 
+function responderLocationFromRecord(record) {
+  return (
+    locationFromRecord(record.responderLocation || record.responder_location) ||
+    locationFromRecord({
+      lat: record.responder_latitude ?? record.responderLatitude,
+      lng: record.responder_longitude ?? record.responderLongitude,
+    })
+  );
+}
+
 function normalizeSOSLifecycleStatus(value) {
   if (value === false) return "cancelled";
   if (value === true) return "pending";
@@ -2011,7 +2039,7 @@ function formatEmergencyRequestFromSupabase(request) {
     locationFromRecord(request.userLocation) ||
     locationFromRecord(request.location) ||
     locationFromRecord({ lat: request.latitude, lng: request.longitude });
-  const responderLocation = locationFromRecord(request.responderLocation);
+  const responderLocation = responderLocationFromRecord(request);
   const responderInfo = request.responderInfo || {};
   const userInfo = request.userProfile || request.userInfo || {};
   const type = request.type || request.emergencyType ||
@@ -2194,6 +2222,7 @@ function formatAlertFromSupabase(record) {
       ""
     ),
     responderName: String(record.responder_name || record.responderName || ""),
+    responderLocation: responderLocationFromRecord(record),
     responderLatitude: Number(record.responder_latitude ?? record.responderLatitude),
     responderLongitude: Number(record.responder_longitude ?? record.responderLongitude),
   };
@@ -2290,6 +2319,14 @@ function formatIncidentFromSupabase(record) {
       record.assigned_responder?.id ||
       ""
     ),
+    responderName: String(
+      record.responder_name ||
+        record.responderName ||
+        record.assignedResponder?.name ||
+        record.assigned_responder?.name ||
+        ""
+    ),
+    responderLocation: responderLocationFromRecord(record),
   };
 }
 
@@ -2805,8 +2842,11 @@ function stopEmergencyLocationSharing(requestId, showMessage = true) {
 function closeAlert(alertId, outcome) {
   const alert = findAlert(alertId);
   if (!alert || !isActive(alert)) return;
-  if (alert.supabaseAlert || alert.supabaseIncident) {
+  if (alert.supabaseRequest || alert.supabaseAlert || alert.supabaseIncident) {
     if (outcome === "false_alarm") return void classifySupabaseSOS(alertId);
+    if (outcome === "resolved" && alert.supabaseRequest) {
+      return void resolveSupabaseSOS(alert);
+    }
     return void cancelSupabaseSOS(alertId);
   }
   const responder = findResponder(alert.responderId);
@@ -2875,7 +2915,10 @@ async function cancelSupabaseSOS(alertId) {
 
 async function classifySupabaseSOS(alertId) {
   const alert = findAlert(alertId);
-  if (!alert || (!alert.supabaseAlert && !alert.supabaseIncident)) return;
+  if (
+    !alert ||
+    (!alert.supabaseRequest && !alert.supabaseAlert && !alert.supabaseIncident)
+  ) return;
   const confirmed = await window.safepaterosConfirm({
     title: "Classify as False Alarm?",
     message: "This incident will remain in history and be categorized as a false alarm.",
@@ -2886,7 +2929,11 @@ async function classifySupabaseSOS(alertId) {
     notify("Supabase status updates are unavailable. The incident was not changed.", "error");
     return;
   }
-  const table = alert.supabaseIncident ? "incidents" : "alerts";
+  const table = alert.supabaseRequest
+    ? "emergency_requests"
+    : alert.supabaseIncident
+      ? "incidents"
+      : "alerts";
   void supabaseDashboard.updateSOSRecordStatus(
     table,
     alert.supabaseRecordId,
@@ -2900,6 +2947,26 @@ async function classifySupabaseSOS(alertId) {
     console.error("SOS false-alarm classification could not be saved.", error);
     notify(`Could not classify incident: ${error.message || "Supabase error"}`, "error");
   });
+}
+
+async function resolveSupabaseSOS(alert) {
+  if (!supabaseDashboard) {
+    notify("Supabase is not connected. The SOS was not resolved.", "error");
+    return;
+  }
+  try {
+    await supabaseDashboard.resolveEmergencyRequest(
+      alert.supabaseRecordId,
+      supabaseDashboard.adminId
+    );
+    alert.status = "resolved";
+    alert.resolvedAt = Date.now();
+    render();
+    notify("SOS request marked resolved.", "success");
+  } catch (error) {
+    console.error("SOS request could not be resolved.", error);
+    notify(`Could not resolve SOS: ${error.message || "Supabase error"}`, "error");
+  }
 }
 
 // --- Responders ---
