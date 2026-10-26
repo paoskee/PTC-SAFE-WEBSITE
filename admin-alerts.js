@@ -431,7 +431,7 @@ function renderAlertCards() {
     return;
   }
   list.innerHTML = pendingAlerts.map((alert) => `
-    <article class="sos-alert-item">
+    <article class="sos-alert-item" id="alert-card-${escapeHtml(alert.id)}">
       <button class="sos-alert-card" type="button" data-open-alert="${escapeHtml(alert.id)}">
         <div class="sos-alert-card-head">
           <strong>${escapeHtml(userNameOf(alert))}</strong>
