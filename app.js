@@ -1906,7 +1906,9 @@ function formatBroadcastFromSupabase(broadcast) {
       : broadcast.audience === "building"
       ? broadcast.building || "One building"
       : String(broadcast.audience || "Everyone on campus");
-  const sentAt = timestampMillisFromRecord(broadcast.sentAt);
+  const sentAt = timestampMillisFromRecord(
+    broadcast.timestamp || broadcast.sentAt
+  );
 
   return {
     id: broadcast.id,
@@ -3202,14 +3204,6 @@ function openModal({
     bar.appendChild(btn);
   });
 
-  const form = $("modal-form");
-  if (form)
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const p = bar.querySelector(".btn-primary");
-      if (p) p.click();
-    });
-
   $("modal-overlay").classList.remove("hidden");
   icons();
   const first = $("modal-body").querySelector("input, select, textarea");
@@ -4213,6 +4207,11 @@ document.addEventListener("change", onFieldChange);
 
 document.addEventListener("submit", (event) => {
   const id = event.target.id;
+  if (id === "modal-form") {
+    event.preventDefault();
+    $("modal-actions").querySelector(".btn-primary")?.click();
+    return;
+  }
   if (id === "broadcast-form") {
     event.preventDefault();
     sendBroadcast();

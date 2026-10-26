@@ -73,9 +73,6 @@ function subscribeToDocuments(
       "postgres_changes",
       { event: "*", schema: "public", table },
       (payload) => {
-        if (table === "alerts") {
-          console.log("Supabase alerts realtime payload:", payload);
-        }
         if (!initialized) {
           pendingChanges.push(payload);
           return;
@@ -130,9 +127,6 @@ function subscribeToDocuments(
         return;
       }
       const page = data || [];
-      if (table === "alerts") {
-        console.log("Supabase alerts fetch payload:", page);
-      }
       loadedRows.push(...page);
       if (rowLimit || page.length < pageSize) break;
       offset += page.length;
@@ -188,8 +182,11 @@ async function updateRequestStatus(requestId, fromStatus, patch) {
 }
 
 export async function assignResponder(incidentId, responderData) {
+  const dispatchedAt = new Date().toISOString();
   await updateDocument("incidents", incidentId, {
-    status: "responding",
+    status: "assigned",
+    responderId: responderData.id,
+    assignedResponderId: responderData.id,
     assignedResponder: {
       id: responderData.id,
       name: responderData.name,
@@ -197,7 +194,7 @@ export async function assignResponder(incidentId, responderData) {
       etaMinutes: responderData.etaMinutes,
       distanceMeters: responderData.distanceMeters,
     },
-    dispatchedAt: new Date().toISOString(),
+    dispatchedAt,
   });
 }
 
@@ -761,18 +758,20 @@ export async function dispatchSOSRecord(table, recordId, responder) {
     return;
   }
   const now = new Date().toISOString();
+  const isIncident = table === "incidents";
   await updateSOSRecord(
     table,
     recordId,
     {
-      status: "Accepted",
+      status: isIncident ? "assigned" : "Accepted",
       assignedResponderId: responder.id,
+      ...(isIncident ? { responderId: responder.id } : {}),
       responderName: responder.name,
       responderPhone: responder.phone,
       responderUnit: responder.unit,
       responderSpecialty: responder.specialty,
       responderEtaMinutes: responder.etaMinutes,
-      acceptedAt: now,
+      ...(!isIncident ? { acceptedAt: now } : {}),
       dispatchedAt: now,
     },
     ["pending", "active", "new", "unhandled"]
@@ -840,7 +839,6 @@ export async function getActiveAlerts() {
     .eq("status", "pending")
     .order("created_at", { ascending: false });
   if (error) throw error;
-  console.log("Supabase pending alerts fetch payload:", data || []);
   return data || [];
 }
 
@@ -929,6 +927,7 @@ export async function sendBroadcast({
     audience,
     sentBy: adminName,
     sentAt,
+    timestamp: sentAt,
   };
   if (building) data.building = building;
 
