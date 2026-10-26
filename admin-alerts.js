@@ -101,7 +101,7 @@ const locationOf = (alert) => {
 const mapsLinkOf = (alert) => {
   const location = locationOf(alert);
   return location
-    ? `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`
+    ? `https://www.mapbox.com/directions/?destination=${location.longitude},${location.latitude}&profile=mapbox/walking`
     : null;
 };
 const userNameOf = (alert) =>
@@ -449,7 +449,7 @@ function renderAlertCards() {
         ${alert.responderName ? `<span class="field-hint block px-4">Assigned to ${escapeHtml(alert.responderName)} · awaiting acceptance</span>` : ""}
         <span class="field-hint">${escapeHtml(elapsedText(alert.timestamp))}</span>
       </button>
-      ${mapsLinkOf(alert) ? `<a class="field-hint inline-block px-4 pb-2" href="${mapsLinkOf(alert)}" target="_blank" rel="noopener noreferrer">Open precise location in Google Maps</a>` : ""}
+      ${mapsLinkOf(alert) ? `<a class="field-hint inline-block px-4 pb-2" href="${mapsLinkOf(alert)}" target="_blank" rel="noopener noreferrer">Open precise location in Mapbox</a>` : ""}
       <div class="alert-actions px-4 pb-4">
         ${alert.assignedResponderId ? "" : `<button class="btn btn-primary btn-sm" type="button" data-dispatch-nearest="${escapeHtml(alert.id)}">Assign nearest</button>
         <button class="btn btn-sm" type="button" data-choose-responder="${escapeHtml(alert.id)}">Assign responder</button>`}
@@ -654,7 +654,7 @@ function renderSelectedAlert(alert) {
     <div><span>Role</span><strong>${escapeHtml(roleOf(alert))}</strong></div>
     <div><span>Phone</span><strong>${escapeHtml(phoneOf(alert))}</strong></div>
     <div><span>Precise coordinates</span><strong>${escapeHtml(locationOf(alert) ? `${locationOf(alert).latitude.toFixed(6)}, ${locationOf(alert).longitude.toFixed(6)}` : "Unavailable")}</strong></div>
-    <div><span>Location</span><strong>${escapeHtml(addressOf(alert))}${mapsLink ? `<br><a class="t-info underline underline-offset-2" href="${mapsLink}" target="_blank" rel="noopener noreferrer">Open precise location in Google Maps</a>` : ""}</strong></div>
+    <div><span>Location</span><strong>${escapeHtml(addressOf(alert))}${mapsLink ? `<br><a class="t-info underline underline-offset-2" href="${mapsLink}" target="_blank" rel="noopener noreferrer">Open precise location in Mapbox</a>` : ""}</strong></div>
     <div><span>Reported</span><strong>${escapeHtml(dateText(alert.timestamp))}</strong></div>
     <div><span>Emergency details</span><strong>${escapeHtml(alert.description || alert.message || alert.note || alert.details || "No additional details provided.")}</strong></div>
     <div><span>Status</span><strong class="sos-status ${statusClass(alert.status)}">${escapeHtml(displayStatus(alert.status))}</strong></div>

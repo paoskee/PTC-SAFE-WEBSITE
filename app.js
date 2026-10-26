@@ -400,12 +400,12 @@ function initialsOf(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 const mapsLink = (item) =>
-  `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
+  `https://www.mapbox.com/directions/?destination=${item.lng},${item.lat}&profile=mapbox/walking`;
 function directionsLink(from, to) {
   return (
-    `https://www.google.com/maps/dir/?api=1&destination=${to.lat},${to.lng}` +
-    (hasPos(from) ? `&origin=${from.lat},${from.lng}` : "") +
-    "&travelmode=walking"
+    `https://www.mapbox.com/directions/?destination=${to.lng},${to.lat}` +
+    (hasPos(from) ? `&origin=${from.lng},${from.lat}` : "") +
+    "&profile=mapbox/walking"
   );
 }
 const badge = (cls, text) => `<span class="badge ${cls}">${esc(text)}</span>`;
@@ -3419,7 +3419,7 @@ function openAlertModal(id) {
     ]) +
     (hasPos(a)
       ? `<p class="text-sm flex flex-wrap gap-x-5 gap-y-1">
-           ${linkOut(mapsLink(a), "Open in Google Maps")}
+           ${linkOut(mapsLink(a), "Open location in Mapbox")}
            ${
              resp && hasPos(resp) && a.status === "responding"
                ? linkOut(
@@ -3630,7 +3630,7 @@ function openResponderModal(id) {
     (hasPos(r)
       ? `<p class="text-sm">${linkOut(
           mapsLink(r),
-          "Open position in Google Maps"
+          "Open position in Mapbox"
         )}</p>`
       : "");
 
