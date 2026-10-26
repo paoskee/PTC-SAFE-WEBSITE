@@ -265,42 +265,64 @@ function subscribeToUserEnrichedDocuments(
   const db = client();
   let active = true;
   let version = 0;
+  let lastStatusesById = new Map();
+  const profilesById = new Map();
   const unsubscribe = subscribeToDocuments(
     table,
     null,
     async (records) => {
       const currentVersion = ++version;
+      const statusesById = new Map(
+        records.map((record) => [
+          String(record.id),
+          String(record.status ?? "").trim().toLowerCase(),
+        ])
+      );
+      const cancellationChanged =
+        table === "alerts" &&
+        records.some((record) => {
+          const id = String(record.id);
+          const status = statusesById.get(id);
+          return (
+            ["cancelled", "canceled", "false_alarm"].includes(status) &&
+            lastStatusesById.get(id) !== status
+          );
+        });
+      lastStatusesById = statusesById;
       const userIds = [...new Set(records
         .map((record) => record.user_id || record.userId || record.uid)
         .filter(Boolean)
         .map(String))];
-      let profiles = new Map();
-      if (userIds.length) {
-        const { data, error } = await db
-          .from("users")
-          .select("*")
-          .in("id", userIds);
-        if (error) reportError(onError, error);
-        else {
-          profiles = new Map((data || []).map((row) => [
-            String(row.id),
-            publicUserProfile(row),
-          ]));
-        }
-      }
-      if (!active || currentVersion !== version) return;
-      onUpdateCallback(records.map((record) => {
+      const missingUserIds = userIds.filter((id) => !profilesById.has(id));
+      const enrich = () => records.map((record) => {
         const userId = String(record.user_id || record.userId || record.uid || "");
         return {
           ...record,
           user_id: userId,
           userProfile:
-            profiles.get(userId) ||
+            profilesById.get(userId) ||
             record.userProfile ||
             record.userInfo ||
             null,
         };
-      }));
+      });
+
+      if (cancellationChanged) onUpdateCallback(enrich());
+      if (missingUserIds.length) {
+        const { data, error } = await db
+          .from("users")
+          .select("*")
+          .in("id", missingUserIds);
+        if (error) reportError(onError, error);
+        else {
+          (data || []).forEach((row) => profilesById.set(
+            String(row.id),
+            publicUserProfile(row),
+          ));
+        }
+      }
+      if (!active || currentVersion !== version) return;
+      onUpdateCallback(enrich());
     },
     onError,
     undefined,
@@ -936,7 +958,7 @@ export async function sendBroadcast({
   const db = client();
   const { data: row, error } = await db
     .from("broadcasts")
-    .insert({ data })
+    .insert({ title, message, data })
     .select("id")
     .single();
   if (error) throw error;

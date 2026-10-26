@@ -181,8 +181,14 @@ create table if not exists public.emergency_requests (
 
 create table if not exists public.broadcasts (
   id text primary key default gen_random_uuid()::text,
+  title text,
+  message text,
   data jsonb not null default '{}'::jsonb
 );
+
+alter table public.broadcasts
+  add column if not exists title text,
+  add column if not exists message text;
 
 create table if not exists public.incidents (
   id text primary key default gen_random_uuid()::text,
