@@ -841,8 +841,13 @@ export async function deleteSOSRecord(table, recordId) {
 
 export async function updateAlertStatus(alertId, status) {
   const updates = { status: alertStatusForStorage(status) };
+  const now = new Date().toISOString();
   if (updates.status === "resolved") {
-    updates.resolved_at = new Date().toISOString();
+    updates.resolved_at = now;
+  }
+  if (updates.status === "cancelled" || updates.status === "false_alarm" || updates.status === "declined") {
+    updates.cancelled_at = now;
+    updates.updated_at = now;
   }
   await updateAlertRow(alertId, updates);
 }
