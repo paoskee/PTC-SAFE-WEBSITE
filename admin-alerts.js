@@ -67,9 +67,6 @@ const normalizedStatus = (value) => {
     cancelled_by_student: "Cancelled",
     canceled_by_user: "Cancelled",
     cancelled_by_user: "Cancelled",
-    canceled_by_student: "Cancelled",
-    cancelled_by_student: "Cancelled",
-    inactive: "Cancelled",
     inactive: "Cancelled",
     false: "Cancelled",
     declined: "Cancelled",
@@ -742,7 +739,9 @@ function renderResponderOptions(available) {
 }
 
 async function dispatchNearest(alertId) {
-  if (!selectedAlertId || selectedAlertId !== alertId) await openAlert(alertId);
+  if (!selectedAlertId || selectedAlertId !== alertId) {
+    selectedAlertId = alertId;
+  }
   const alert = alerts.find((item) => item.id === alertId);
   if (!alert) return;
   const responder = getAvailableResponders(alert)[0];
@@ -825,6 +824,7 @@ async function dispatchToResponder(alert, responder) {
     });
     byId("sos-dispatch-form").hidden = true;
     renderAll();
+    closeDetail();
     toast(alert.sourceTable === "alerts"
       ? `${responder.name} assigned. Waiting for responder acceptance.`
       : `${responder.name} dispatched. You can now mark the incident resolved.`);
