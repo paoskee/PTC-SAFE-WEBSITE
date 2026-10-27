@@ -54,6 +54,95 @@ function reportError(onError, error) {
 
 const locallyPublishedBroadcastIds = new Set();
 
+async function ensureAuthenticatedSession() {
+  const db = client();
+  try {
+    const { data, error } = await db.auth.getSession();
+    if (error) throw error;
+    return data.session;
+  } catch (e) {
+    console.warn("Session check before subscription warning:", e);
+    return null;
+  }
+}
+
+async function createManagedChannel(channelName, setupChannel, onReconnect, onError) {
+  let active = true;
+  let currentChannel = null;
+  let retryCount = 0;
+  let retryTimer = null;
+  const maxRetries = 8;
+
+  async function connect() {
+    if (!active) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      // Wait for online event before connecting
+      return;
+    }
+    
+    await ensureAuthenticatedSession();
+    if (!active) return;
+
+    const db = client();
+    if (currentChannel) {
+      try {
+        await db.removeChannel(currentChannel);
+      } catch (e) {}
+      currentChannel = null;
+    }
+
+    // Use unique channel topic to avoid collision with stale client sockets
+    const uniqueChannelName = `${channelName}-${crypto.randomUUID()}`;
+    const channel = db.channel(uniqueChannelName);
+    currentChannel = channel;
+    setupChannel(channel);
+
+    channel.subscribe(async (status, error) => {
+      if (!active) return;
+      if (status === "SUBSCRIBED") {
+        retryCount = 0;
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        const err = error || new Error(`Realtime channel status: ${status}`);
+        
+        // Suppress logging spam if offline or page is hidden
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          return;
+        }
+
+        if (retryCount < maxRetries) {
+          retryCount++;
+          // Exponential backoff with jitter, capped at 30 seconds
+          const delay = Math.min(1000 * Math.pow(2, retryCount) + Math.random() * 1000, 30000);
+          if (retryTimer) clearTimeout(retryTimer);
+          
+          retryTimer = setTimeout(() => {
+            if (active) {
+              if (onReconnect) onReconnect();
+              void connect();
+            }
+          }, delay);
+        } else {
+          console.warn(`Channel ${channelName} reached max reconnection attempts (${maxRetries}).`);
+          reportError(onError, err);
+        }
+      }
+    });
+  }
+
+  void connect();
+
+  return () => {
+    active = false;
+    if (retryTimer) clearTimeout(retryTimer);
+    if (currentChannel) {
+      try {
+        client().removeChannel(currentChannel);
+      } catch (e) {}
+      currentChannel = null;
+    }
+  };
+}
+
 function subscribeToDocuments(
   table,
   orderField,
@@ -67,50 +156,12 @@ function subscribeToDocuments(
   const pendingChanges = [];
   let initialized = false;
   let active = true;
-  const channel = db
-    .channel(`${table}-dashboard-${crypto.randomUUID()}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table },
-      (payload) => {
-        if (!initialized) {
-          pendingChanges.push(payload);
-          return;
-        }
-        applyChange(payload);
-        publish();
-      }
-    )
-    .subscribe((status, error) => {
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        reportError(onError, error || new Error(`Realtime channel status: ${status}`));
-      }
-    });
-
-  function applyChange(payload) {
-    const row = payload.new;
-    const oldRow = payload.old;
-    const id = row?.id || oldRow?.id;
-    if (!id) return;
-    if (payload.eventType === "DELETE") rowsById.delete(id);
-    else rowsById.set(id, row);
-  }
-
-  function publish() {
-    if (!active) return;
-    let result = documents([...rowsById.values()]);
-    if (orderField) {
-      result.sort((first, second) =>
-        String(second[orderField] || "").localeCompare(
-          String(first[orderField] || "")
-        )
-      );
-    }
-    if (rowLimit) result = result.slice(0, rowLimit);
-    onUpdate(result);
-  }
+  let unsubscribeChannel = null;
 
   const load = async () => {
+    await ensureAuthenticatedSession();
+    if (!active) return;
+
     const pageSize = 1000;
     const loadedRows = [];
     let offset = 0;
@@ -141,35 +192,130 @@ function subscribeToDocuments(
   };
 
   void load();
+
+  const channelName = `${table}-dashboard-${crypto.randomUUID()}`;
+
+  async function initChannel() {
+    await ensureAuthenticatedSession();
+    if (!active) return;
+
+    unsubscribeChannel = await createManagedChannel(
+      channelName,
+      (ch) => {
+        ch.on(
+          "postgres_changes",
+          { event: "*", schema: "public", table },
+          (payload) => {
+            if (!initialized) {
+              pendingChanges.push(payload);
+              return;
+            }
+            applyChange(payload);
+            publish();
+          }
+        );
+      },
+      () => {
+        void load();
+      },
+      onError
+    );
+  }
+
+  void initChannel();
+
+  function applyChange(payload) {
+    const row = payload.new;
+    const oldRow = payload.old;
+    const id = row?.id || oldRow?.id;
+    if (!id) return;
+    if (payload.eventType === "DELETE") rowsById.delete(id);
+    else rowsById.set(id, row);
+  }
+
+  function publish() {
+    if (!active) return;
+    let result = documents([...rowsById.values()]);
+    if (orderField) {
+      result.sort((first, second) =>
+        String(second[orderField] || "").localeCompare(
+          String(first[orderField] || "")
+        )
+      );
+    }
+    if (rowLimit) result = result.slice(0, rowLimit);
+    onUpdate(result);
+  }
+
   return () => {
     active = false;
-    void db.removeChannel(channel);
+    if (unsubscribeChannel) unsubscribeChannel();
   };
 }
 
-async function updateDocument(table, id, patch, expectedStatus) {
+async function updateDocument(table, id, patch, expectedStatusOrStatuses) {
   const db = client();
   const { data: current, error: readError } = await db
     .from(table)
-    .select("data")
+    .select("*")
     .eq("id", id)
     .maybeSingle();
   if (readError) throw readError;
   if (!current) throw new Error(`The ${table} record no longer exists.`);
-  if (
-    expectedStatus !== undefined &&
-    current.data?.status !== expectedStatus
-  ) {
-    throw new Error(`The ${table} record is no longer ${expectedStatus}.`);
+  
+  const currentData = current.data && typeof current.data === "object" ? current.data : {};
+  const currentStatus = String(currentData.status || current.status || "").trim().toLowerCase();
+
+  if (expectedStatusOrStatuses !== undefined) {
+    const allowed = Array.isArray(expectedStatusOrStatuses)
+      ? expectedStatusOrStatuses.map((s) => String(s).toLowerCase())
+      : [String(expectedStatusOrStatuses).toLowerCase()];
+    if (!allowed.includes(currentStatus)) {
+      throw new Error(`The ${table} record is no longer active (current status: ${currentStatus}).`);
+    }
+  }
+
+  // Build merged JSONB data payload
+  const updatedData = { ...currentData, ...patch };
+
+  // Build top-level columns update (support both camelCase and snake_case for maximum mobile/web compatibility)
+  const topLevelUpdate = {
+    data: updatedData,
+  };
+
+  if (Object.hasOwn(patch, "status")) {
+    topLevelUpdate.status = patch.status;
+  }
+  if (Object.hasOwn(patch, "cancelledAt")) {
+    topLevelUpdate.cancelled_at = patch.cancelledAt;
+    topLevelUpdate.cancelledAt = patch.cancelledAt;
+  }
+  if (Object.hasOwn(patch, "resolvedAt")) {
+    topLevelUpdate.resolved_at = patch.resolvedAt;
+    topLevelUpdate.resolvedAt = patch.resolvedAt;
+  }
+  if (Object.hasOwn(patch, "updatedAt")) {
+    topLevelUpdate.updated_at = patch.updatedAt;
+    topLevelUpdate.updatedAt = patch.updatedAt;
+  }
+  if (Object.hasOwn(patch, "handledBy")) {
+    topLevelUpdate.handled_by = patch.handledBy;
+    topLevelUpdate.handledBy = patch.handledBy;
+  }
+  if (Object.hasOwn(patch, "cancelledBy")) {
+    topLevelUpdate.cancelled_by = patch.cancelledBy;
+    topLevelUpdate.cancelledBy = patch.cancelledBy;
+  }
+  if (Object.hasOwn(patch, "cancellationReason")) {
+    topLevelUpdate.cancellation_reason = patch.cancellationReason;
+    topLevelUpdate.cancellationReason = patch.cancellationReason;
   }
 
   let query = db
     .from(table)
-    .update({ data: { ...(current.data || {}), ...patch } })
+    .update(topLevelUpdate)
     .eq("id", id);
-  if (expectedStatus !== undefined) {
-    query = query.eq("data->>status", expectedStatus);
-  }
+  
   const { data, error } = await query.select("id");
   if (error) throw error;
   if (!data?.length) {
@@ -177,8 +323,8 @@ async function updateDocument(table, id, patch, expectedStatus) {
   }
 }
 
-async function updateRequestStatus(requestId, fromStatus, patch) {
-  await updateDocument("emergency_requests", requestId, patch, fromStatus);
+async function updateRequestStatus(requestId, expectedStatuses, patch) {
+  await updateDocument("emergency_requests", requestId, patch, expectedStatuses);
 }
 
 export async function assignResponder(incidentId, responderData) {
@@ -216,26 +362,34 @@ export function subscribeToBroadcasts(onUpdateCallback, onError) {
 }
 
 export function subscribeToCampusBroadcasts(onBroadcast, onError) {
-  const db = client();
   let active = true;
-  const channel = db
-    .channel("campus_broadcasts")
-    .on("broadcast", { event: "campus_alert" }, ({ payload }) => {
-      if (
-        !active ||
-        (payload?.id && locallyPublishedBroadcastIds.has(String(payload.id)))
-      ) return;
-      onBroadcast(payload);
-    })
-    .subscribe((status, error) => {
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        reportError(onError, error || new Error(`Broadcast channel status: ${status}`));
-      }
-    });
+  let unsubscribeChannel = null;
+
+  async function init() {
+    await ensureAuthenticatedSession();
+    if (!active) return;
+
+    unsubscribeChannel = await createManagedChannel(
+      "campus_broadcasts",
+      (ch) => {
+        ch.on("broadcast", { event: "campus_alert" }, ({ payload }) => {
+          if (
+            !active ||
+            (payload?.id && locallyPublishedBroadcastIds.has(String(payload.id)))
+          ) return;
+          onBroadcast(payload);
+        });
+      },
+      () => {},
+      onError
+    );
+  }
+
+  void init();
 
   return () => {
     active = false;
-    void db.removeChannel(channel);
+    if (unsubscribeChannel) unsubscribeChannel();
   };
 }
 
@@ -412,26 +566,67 @@ export function subscribeToIncidents(onUpdateCallback, onError) {
   let initialized = false;
   let active = true;
   let changeQueue = Promise.resolve();
-  const channel = db
-    .channel("public:incidents")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "incidents" },
-      (payload) => {
-        if (!initialized) {
-          pendingChanges.push(payload);
-          return;
-        }
-        changeQueue = changeQueue
-          .then(() => applyIncidentChange(payload))
-          .catch((error) => reportError(onError, error));
-      }
-    )
-    .subscribe((status, error) => {
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        reportError(onError, error || new Error(`Realtime channel status: ${status}`));
-      }
+  let unsubscribeChannel = null;
+
+  async function loadInitialIncidents() {
+    await ensureAuthenticatedSession();
+    if (!active) return;
+
+    const rows = [];
+    const pageSize = 1000;
+    for (let offset = 0; active; offset += pageSize) {
+      const result = await db
+        .from("incidents")
+        .select("*")
+        .range(offset, offset + pageSize - 1);
+      if (result.error) throw result.error;
+      const page = result.data || [];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+    if (!active) return;
+    const hydrated = await hydrate(rows);
+    incidentsById.clear();
+    hydrated.forEach((incident) => {
+      if (incident.id) incidentsById.set(String(incident.id), incident);
     });
+    initialized = true;
+    for (const payload of pendingChanges.splice(0)) {
+      await applyIncidentChange(payload, false);
+    }
+    publish();
+  }
+
+  async function init() {
+    await ensureAuthenticatedSession();
+    if (!active) return;
+
+    unsubscribeChannel = await createManagedChannel(
+      "public:incidents",
+      (ch) => {
+        ch.on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "incidents" },
+          (payload) => {
+            if (!initialized) {
+              pendingChanges.push(payload);
+              return;
+            }
+            changeQueue = changeQueue
+              .then(() => applyIncidentChange(payload))
+              .catch((error) => reportError(onError, error));
+          }
+        );
+      },
+      () => {
+        void loadInitialIncidents().catch((error) => reportError(onError, error));
+      },
+      onError
+    );
+  }
+
+  void loadInitialIncidents().catch((error) => reportError(onError, error));
+  void init();
 
   function publish() {
     if (active) onUpdateCallback([...incidentsById.values()]);
@@ -470,32 +665,6 @@ export function subscribeToIncidents(onUpdateCallback, onError) {
     }));
   }
 
-  async function loadInitialIncidents() {
-    const rows = [];
-    const pageSize = 1000;
-    for (let offset = 0; active; offset += pageSize) {
-      const result = await db
-        .from("incidents")
-        .select("*")
-        .range(offset, offset + pageSize - 1);
-      if (result.error) throw result.error;
-      const page = result.data || [];
-      rows.push(...page);
-      if (page.length < pageSize) break;
-    }
-    if (!active) return;
-    const hydrated = await hydrate(rows);
-    incidentsById.clear();
-    hydrated.forEach((incident) => {
-      if (incident.id) incidentsById.set(String(incident.id), incident);
-    });
-    initialized = true;
-    for (const payload of pendingChanges.splice(0)) {
-      await applyIncidentChange(payload, false);
-    }
-    publish();
-  }
-
   async function applyIncidentChange(payload, publishAfter = true) {
     if (!active) return;
     const row = payload.new;
@@ -512,10 +681,9 @@ export function subscribeToIncidents(onUpdateCallback, onError) {
     if (publishAfter) publish();
   }
 
-  void loadInitialIncidents().catch((error) => reportError(onError, error));
   return () => {
     active = false;
-    void db.removeChannel(channel);
+    if (unsubscribeChannel) unsubscribeChannel();
   };
 }
 
@@ -750,21 +918,33 @@ async function updateSOSRecord(table, recordId, patch, expectedStatuses) {
       currentStatus
     );
   }
-  const updates = isDocumentRecord
-    ? { data: { ...current.data, ...normalizedPatch } }
-    : Object.fromEntries(
-        Object.entries(normalizedPatch)
-          .map(([field, value]) => {
-            if (Object.hasOwn(current, field)) return [field, value];
-            const snakeField = field.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-            if (Object.hasOwn(current, snakeField)) return [snakeField, value];
-            if (field === "cancelledAt" && Object.hasOwn(current, "canceled_at")) {
-              return ["canceled_at", value];
-            }
-            return null;
-          })
-          .filter(Boolean)
-      );
+
+  // Build updates that populate BOTH JSONB data AND top-level columns simultaneously
+  const currentData = current.data && typeof current.data === "object" ? current.data : {};
+  const updatedData = { ...currentData, ...normalizedPatch };
+
+  const updates = {
+    data: updatedData,
+  };
+
+  // Populate top-level columns if they exist on the table or if we want to ensure compatibility
+  if (Object.hasOwn(current, "status") || isDocumentRecord) {
+    updates.status = normalizedPatch.status;
+  }
+  if (Object.hasOwn(normalizedPatch, "cancelledAt")) {
+    if (Object.hasOwn(current, "cancelled_at")) updates.cancelled_at = normalizedPatch.cancelledAt;
+    if (Object.hasOwn(current, "cancelledAt")) updates.cancelledAt = normalizedPatch.cancelledAt;
+    if (Object.hasOwn(current, "canceled_at")) updates.canceled_at = normalizedPatch.cancelledAt;
+  }
+  if (Object.hasOwn(normalizedPatch, "resolvedAt")) {
+    if (Object.hasOwn(current, "resolved_at")) updates.resolved_at = normalizedPatch.resolvedAt;
+    if (Object.hasOwn(current, "resolvedAt")) updates.resolvedAt = normalizedPatch.resolvedAt;
+  }
+  if (Object.hasOwn(normalizedPatch, "updatedAt")) {
+    if (Object.hasOwn(current, "updated_at")) updates.updated_at = normalizedPatch.updatedAt;
+    if (Object.hasOwn(current, "updatedAt")) updates.updatedAt = normalizedPatch.updatedAt;
+  }
+
   let query = db.from(table).update(updates).eq("id", recordId);
   if (expectedStatuses?.length && !isDocumentRecord) {
     query = query.eq("status", currentStatus);
@@ -884,7 +1064,7 @@ export async function deleteAlertRecord(alertId) {
 
 export async function acceptEmergencyRequest(requestId, responderInfo, adminId) {
   const now = new Date().toISOString();
-  await updateRequestStatus(requestId, "pending", {
+  await updateRequestStatus(requestId, ["pending", "active", "new", "unhandled"], {
     status: "accepted",
     responderInfo,
     acceptedAt: now,
@@ -893,10 +1073,15 @@ export async function acceptEmergencyRequest(requestId, responderInfo, adminId) 
   });
 }
 
-export async function cancelEmergencyRequest(requestId, adminId) {
+export async function cancelEmergencyRequest(requestId, adminId, reason = "Cancelled by dispatcher") {
   const now = new Date().toISOString();
-  await updateRequestStatus(requestId, "pending", {
+  await updateRequestStatus(requestId, ["pending", "accepted", "responding", "assigned", "active", "new"], {
     status: "cancelled",
+    cancelled_by: "admin",
+    cancelledBy: "admin",
+    cancellation_reason: reason,
+    cancellationReason: reason,
+    cancelled_at: now,
     cancelledAt: now,
     updatedAt: now,
     handledBy: adminId,
@@ -905,7 +1090,7 @@ export async function cancelEmergencyRequest(requestId, adminId) {
 
 export async function resolveEmergencyRequest(requestId, adminId) {
   const now = new Date().toISOString();
-  await updateRequestStatus(requestId, "accepted", {
+  await updateRequestStatus(requestId, ["pending", "accepted", "responding", "assigned", "active", "new"], {
     status: "resolved",
     resolvedAt: now,
     updatedAt: now,
