@@ -789,11 +789,11 @@ const SOS_TABLES = new Set(["alerts", "emergency_requests", "incidents"]);
 
 function alertStatusForStorage(status) {
   return ({
-    Accepted: "dispatched",
-    Responding: "dispatched",
-    Dispatched: "dispatched",
+    Accepted: "accepted",
+    Responding: "responding",
+    Dispatched: "responding",
     Resolved: "resolved",
-    Declined: "declined",
+    Declined: "cancelled",
     Cancelled: "cancelled",
     "False Alarm": "false_alarm",
   })[status] || String(status).trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -1020,14 +1020,20 @@ export async function deleteSOSRecord(table, recordId) {
 }
 
 export async function updateAlertStatus(alertId, status) {
-  const updates = { status: alertStatusForStorage(status) };
+  const storageStatus = alertStatusForStorage(status);
+  const targetStatus = storageStatus === "declined" ? "cancelled" : storageStatus;
+  const updates = { status: targetStatus };
   const now = new Date().toISOString();
-  if (updates.status === "resolved") {
+  if (targetStatus === "resolved") {
     updates.resolved_at = now;
   }
-  if (updates.status === "cancelled" || updates.status === "false_alarm" || updates.status === "declined") {
+  if (targetStatus === "cancelled" || targetStatus === "false_alarm") {
     updates.cancelled_at = now;
     updates.updated_at = now;
+  }
+  if (targetStatus === "cancelled") {
+    updates.cancelled_by = "admin";
+    updates.responder_status = "cancelled";
   }
   await updateAlertRow(alertId, updates);
 }

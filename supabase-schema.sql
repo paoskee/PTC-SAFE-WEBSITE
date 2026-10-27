@@ -26,6 +26,11 @@ create table if not exists public.alerts (
   accepted_at timestamptz,
   dispatched_at timestamptz,
   resolved_at timestamptz,
+  cancelled_at timestamptz,
+  cancelled_by text check (cancelled_by in ('user', 'admin')),
+  cancellation_reason text,
+  updated_at timestamptz,
+  responder_status text,
   responder_latitude double precision,
   responder_longitude double precision,
   responder_location_updated_at timestamptz,
@@ -51,10 +56,26 @@ alter table public.alerts
   add column if not exists accepted_at timestamptz,
   add column if not exists dispatched_at timestamptz,
   add column if not exists resolved_at timestamptz,
+  add column if not exists cancelled_at timestamptz,
+  add column if not exists cancelled_by text,
+  add column if not exists cancellation_reason text,
+  add column if not exists updated_at timestamptz,
+  add column if not exists responder_status text,
   add column if not exists responder_latitude double precision,
   add column if not exists responder_longitude double precision,
   add column if not exists responder_location_updated_at timestamptz,
   add column if not exists data jsonb not null default '{}'::jsonb;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'alerts_cancelled_by_check'
+  ) then
+    alter table public.alerts
+      add constraint alerts_cancelled_by_check check (cancelled_by in ('user', 'admin'));
+  end if;
+end $$;
 
 update public.alerts
 set
