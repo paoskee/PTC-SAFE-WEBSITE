@@ -631,6 +631,40 @@ button.stat-card:hover {
 .pin-resp.is-offline {
   background: #71717a;
 }
+/* ---------- Unique Active Responder Pins ---------- */
+.pin-responder-unique {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  border: 2px solid #ffffff;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+.pin-responder-unique:hover {
+  transform: scale(1.1);
+}
+.pin-responder-unique.is-online-onduty {
+  background: #16a34a;
+}
+.pin-responder-unique.is-busy {
+  background: #ea580c;
+}
+.pin-responder-unique.is-offline {
+  background: #71717a;
+}
+.pin-responder-badge {
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
 .pin-tag {
   position: absolute;
   top: 100%;

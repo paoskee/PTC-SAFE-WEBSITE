@@ -1265,6 +1265,13 @@ function pinHTML(kind, item) {
   }
   if (kind === "user")
     return `<span class="pin pin-user ${item.online ? "is-online" : "is-offline"}"><i data-lucide="map-pin"></i><span class="pin-tag">${esc(item.name)}</span></span>`;
+  if (kind === "responder") {
+    const isOnlineOnDuty = item.isOnline && item.isOnDuty && item.status !== "responding";
+    const isBusy = item.status === "responding";
+    const cls = isOnlineOnDuty ? "is-online-onduty" : isBusy ? "is-busy" : "is-offline";
+    const badgeText = isOnlineOnDuty ? "ON" : isBusy ? "RESP" : "OFF";
+    return `<span class="pin pin-responder-unique ${cls}"><span class="pin-responder-badge">${badgeText}</span><span class="pin-tag">${esc(item.name)}</span></span>`;
+  }
   const hasPresence = typeof item.isOnline === "boolean" || typeof item.isOnDuty === "boolean";
   const cls = hasPresence
     ? item.isOnline && item.isOnDuty ? "is-online" : "is-offline"
@@ -4367,6 +4374,18 @@ window.addEventListener("beforeunload", () => {
     navigator.geolocation.clearWatch(watchId)
   );
 });
+  if (typeof supabaseDashboard.subscribeToUsers === "function") {
+    supabaseDashboard.subscribeToUsers(
+      (users) => {
+        syncRegisteredStaff(users);
+        render();
+      },
+      (error) => {
+        console.error("Supabase user profiles subscription failed for map:", error);
+      }
+    );
+  }
+
 window.addEventListener("safepateros:supabase-ready", (event) => {
   supabaseDashboard = event.detail;
 
