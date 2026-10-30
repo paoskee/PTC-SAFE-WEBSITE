@@ -4405,6 +4405,24 @@ window.addEventListener("safepateros:supabase-ready", (event) => {
   $("supabase-connection-status").textContent =
     "Supabase initialized; checking database connection…";
 
+  if (typeof supabaseDashboard.subscribeToUsers === "function") {
+    supabaseDashboard.subscribeToUsers(
+      (users) => {
+        syncRegisteredStaff(users);
+        render();
+      },
+      (error) => {
+        console.error("Supabase user profiles subscription failed for map:", error);
+      }
+    );
+  }
+
+window.addEventListener("safepateros:supabase-ready", (event) => {
+  supabaseDashboard = event.detail;
+
+  $("supabase-connection-status").textContent =
+    "Supabase initialized; checking database connection…";
+
   if (typeof supabaseDashboard.subscribeToEmergencyRequests === "function") {
     supabaseDashboard.subscribeToEmergencyRequests(
       (requests) => {

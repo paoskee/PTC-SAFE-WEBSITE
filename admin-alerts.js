@@ -623,6 +623,8 @@ function renderMap(alert) {
       try {
         const token = window.mapboxgl.accessToken || MAPBOX_ACCESS_TOKEN || "pk.eyJ1IjoicGFvcGFvc2tpZXMiLCJhIjoiY212Z3JydHl3MDJtaDJ3cHh6azRueG1uZCJ9.3DvaMQuDVkc7FiRmkeiLOQ";
         const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/walking/${responderLongitude},${responderLatitude};${victim.longitude},${victim.latitude}?geometries=geojson&access_token=${token}`;
+        const MAPBOX_ACCESS_TOKEN = window.MAPBOX_ACCESS_TOKEN || "pk.eyJ1IjoicGFvcGFvc2tpZXMiLCJhIjoiY212Z3JydHl3MDJtaDJ3cHh6azRueG1uZCJ9.3DvaMQuDVkc7FiRmkeiLOQ";
+
         const res = await fetch(dirUrl);
         const data = await res.json();
         if (data && data.routes && data.routes[0] && data.routes[0].geometry) {
