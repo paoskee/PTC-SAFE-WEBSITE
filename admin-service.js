@@ -1,4 +1,4 @@
-import { supabase } from "./supabase-config.js";
+import { supabase, isAdminRow } from "./supabase-config.js";
 
 const ALERT_COLUMNS =
   "id,user_id,user_name,user_phone,emergency_type,latitude,longitude,status,created_at";
@@ -14,12 +14,36 @@ async function requireAdminSession() {
   if (error) throw error;
   if (!data.session) throw new Error("Sign in as an administrator to update alerts.");
 
-  const { data: isAdmin, error: adminError } = await db.rpc("is_admin");
-  if (adminError) throw adminError;
-  if (isAdmin !== true) {
+  let isAdmin = false;
+  const { data: rpcResult, error: adminError } = await db.rpc("is_admin");
+  if (!adminError) {
+    isAdmin = rpcResult === true;
+  } else {
+    // Fall back to the caller's own users row (flat column or legacy JSON).
+    const { data: row, error: rowError } = await db
+      .from("users")
+      .select("*")
+      .eq("id", data.session.user.id)
+      .maybeSingle();
+    if (rowError) throw adminError;
+    isAdmin = isAdminRow(row);
+  }
+  if (!isAdmin) {
     throw new Error("Administrator access is required to update alerts.");
   }
 }
+
+const FLAT_TO_CAMEL = {
+  is_admin: "isAdmin",
+  staff_specialty: "staffSpecialty",
+  is_on_duty: "isOnDuty",
+  is_online: "isOnline",
+  student_id: "studentId",
+  contact_number: "contactNumber",
+  quick_type: "quickType",
+  sent_by: "sentBy",
+  sent_at: "sentAt",
+};
 
 function documents(rows = []) {
   return rows.map((row) => {
@@ -27,10 +51,16 @@ function documents(rows = []) {
     const nonNullColumns = Object.fromEntries(
       Object.entries(columns).filter(([, value]) => value !== null)
     );
-    return {
+    const merged = {
       ...(data && typeof data === "object" ? data : {}),
       ...nonNullColumns,
     };
+    for (const [flat, camel] of Object.entries(FLAT_TO_CAMEL)) {
+      if (merged[flat] !== undefined && merged[camel] === undefined) {
+        merged[camel] = merged[flat];
+      }
+    }
+    return merged;
   });
 }
 
