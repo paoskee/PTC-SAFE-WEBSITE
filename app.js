@@ -4049,6 +4049,8 @@ function navigate(name) {
   else location.hash = `#/${name}`;
 }
 
+window.addEventListener("hashchange", route);
+
 // Lighter re-render used while typing in filters (does not touch the map)
 function renderLists() {
   renderAlertsFull();
@@ -4387,7 +4389,16 @@ window.addEventListener("beforeunload", () => {
     navigator.geolocation.clearWatch(watchId)
   );
 });
-  if (typeof supabaseDashboard.subscribeToUsers === "function") {
+
+window.addEventListener("safepateros:supabase-ready", (event) => {
+  supabaseDashboard = event.detail;
+
+  if ($("supabase-connection-status")) {
+    $("supabase-connection-status").textContent =
+      "Supabase initialized; checking database connection…";
+  }
+
+  if (supabaseDashboard && typeof supabaseDashboard.subscribeToUsers === "function") {
     supabaseDashboard.subscribeToUsers(
       (users) => {
         syncRegisteredStaff(users);
@@ -4398,12 +4409,6 @@ window.addEventListener("beforeunload", () => {
       }
     );
   }
-
-window.addEventListener("safepateros:supabase-ready", (event) => {
-  supabaseDashboard = event.detail;
-
-  $("supabase-connection-status").textContent =
-    "Supabase initialized; checking database connection…";
 
   if (typeof supabaseDashboard.subscribeToEmergencyRequests === "function") {
     supabaseDashboard.subscribeToEmergencyRequests(
