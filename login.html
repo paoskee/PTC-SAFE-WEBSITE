@@ -838,6 +838,7 @@
         isSupabaseConfigured,
         setAuthPersistence,
         supabase,
+        isAdminRow,
       } from "./supabase-config.js";
 
       const form = document.querySelector("#login-form");
@@ -866,11 +867,11 @@
       async function verifyAdmin(user) {
         const { data: profile, error } = await supabase
           .from("users")
-          .select("data")
+          .select("*")
           .eq("id", user.id)
           .maybeSingle();
         if (error) throw error;
-        return profile?.data?.isAdmin === true;
+        return isAdminRow(profile);
       }
 
       async function signOut() {

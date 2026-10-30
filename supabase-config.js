@@ -31,3 +31,14 @@ export const supabase = isSupabaseConfigured
 export function setAuthPersistence(rememberMe) {
   authStorage = rememberMe ? window.localStorage : window.sessionStorage;
 }
+
+export function isAdminRow(row) {
+  if (!row || typeof row !== "object") return false;
+  return (
+    row.is_admin === true ||
+    row.isAdmin === true ||
+    row.data?.isAdmin === true ||
+    row.data?.is_admin === true
+  );
+}
+

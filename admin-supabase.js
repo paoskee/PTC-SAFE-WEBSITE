@@ -1,4 +1,28 @@
-import { isSupabaseConfigured, supabase } from "./supabase-config.js";
+import { isSupabaseConfigured, supabase, isAdminRow } from "./supabase-config.js";
+
+async function runDiagnostics(userId, profile) {
+  try {
+    const isAdmin = isAdminRow(profile);
+    const tables = ["alerts", "users", "broadcasts", "emergency_requests", "incidents"];
+    const counts = {};
+    await Promise.all(
+      tables.map(async (table) => {
+        const { count, error } = await supabase
+          .from(table)
+          .select("*", { count: "exact", head: true });
+        counts[table] = error ? `error: ${error.message}` : count;
+      })
+    );
+    console.group("SafePateros Admin Diagnostics");
+    console.log("Session User ID:", userId);
+    console.log("Users Profile ID:", profile?.id || "(none)");
+    console.log("isAdmin Result:", isAdmin);
+    console.log("Table Head Counts:", counts);
+    console.groupEnd();
+  } catch (err) {
+    console.warn("Diagnostics error:", err);
+  }
+}
 
 async function initializeDashboardSupabase() {
   if (!isSupabaseConfigured || !supabase) {
@@ -30,17 +54,18 @@ async function initializeDashboardSupabase() {
 
     const { data: profile, error: profileError } = await supabase
       .from("users")
-      .select("data")
+      .select("*")
       .eq("id", user.id)
       .maybeSingle();
     if (profileError) throw profileError;
-    if (profile?.data?.isAdmin !== true) {
+    if (!isAdminRow(profile)) {
       subscription.unsubscribe();
       const { error: signOutError } = await supabase.auth.signOut();
       if (signOutError) throw signOutError;
       window.location.replace("login.html?accessDenied=1");
       return;
     }
+    void runDiagnostics(user.id, profile);
 
     try {
       const service = await import("./admin-service.js");
