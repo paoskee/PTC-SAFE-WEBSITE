@@ -149,7 +149,7 @@ function subscribeToDocuments(
   onUpdate,
   onError,
   rowLimit,
-  selectFields = "id,data"
+  selectFields = "*"
 ) {
   const db = client();
   const rowsById = new Map();
@@ -168,7 +168,9 @@ function subscribeToDocuments(
     while (active) {
       let query = db.from(table).select(selectFields);
       if (orderField) {
-        query = query.order(`data->>${orderField}`, { ascending: false });
+        query = table === "broadcasts"
+          ? query.order("sent_at", { ascending: false, nullsFirst: false })
+          : query.order(`data->>${orderField}`, { ascending: false });
       }
       if (rowLimit) query = query.limit(rowLimit);
       else query = query.range(offset, offset + pageSize - 1);
@@ -238,8 +240,8 @@ function subscribeToDocuments(
     let result = documents([...rowsById.values()]);
     if (orderField) {
       result.sort((first, second) =>
-        String(second[orderField] || "").localeCompare(
-          String(first[orderField] || "")
+        String(second[orderField] || second.sent_at || second.created_at || "").localeCompare(
+          String(first[orderField] || first.sent_at || first.created_at || "")
         )
       );
     }
@@ -772,13 +774,12 @@ export async function refreshDashboardData() {
 }
 
 export async function getStaffResponders() {
-  const { data, error } = await client().from("users").select("id,data");
+  const { data, error } = await client().from("users").select("*");
   if (error) throw error;
-  return documents(data).filter(
-    (user) =>
-      typeof user.staffSpecialty === "string" &&
-      user.staffSpecialty.trim().length > 0
-  );
+  return documents(data).filter((user) => {
+    const specialty = user.staffSpecialty ?? user.staff_specialty;
+    return typeof specialty === "string" && specialty.trim().length > 0;
+  });
 }
 
 export async function acceptAndDispatchAlert(alertId, responder) {
@@ -1170,11 +1171,29 @@ export async function sendBroadcast({
   if (building) data.building = building;
 
   const db = client();
-  const { data: row, error } = await db
+  const flatRow = {
+    title,
+    message,
+    quick_type: quickType || null,
+    urgency: urgency || null,
+    audience: audience || null,
+    sent_by: adminName || null,
+    sent_at: sentAt,
+    status: "active",
+    data,
+  };
+  let { data: row, error } = await db
     .from("broadcasts")
-    .insert({ title, message, data })
+    .insert(flatRow)
     .select("id")
     .single();
+  if (error && /column|schema cache/i.test(error.message || "")) {
+    ({ data: row, error } = await db
+      .from("broadcasts")
+      .insert({ title, message, data })
+      .select("id")
+      .single());
+  }
   if (error) throw error;
 
   const payload = {

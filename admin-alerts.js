@@ -564,7 +564,7 @@ function setupMap() {
   });
 }
 
-function renderMap(alert) {
+async function renderMap(alert) {
   const victim = locationOf(alert);
   const responderLatitude = Number(alert.responderLatitude);
   const responderLongitude = Number(alert.responderLongitude);
@@ -621,9 +621,9 @@ function renderMap(alert) {
 
       // Fetch Mapbox Directions API for street-by-street routing
       try {
-        const token = window.mapboxgl.accessToken || MAPBOX_ACCESS_TOKEN || "pk.eyJ1IjoicGFvcGFvc2tpZXMiLCJhIjoiY212Z3JydHl3MDJtaDJ3cHh6azRueG1uZCJ9.3DvaMQuDVkc7FiRmkeiLOQ";
+        const FALLBACK_MAPBOX_TOKEN = "pk.eyJ1IjoicGFvcGFvc2tpZXMiLCJhIjoiY212Z3JydHl3MDJtaDJ3cHh6azRueG1uZCJ9.3DvaMQuDVkc7FiRmkeiLOQ";
+        const token = window.mapboxgl.accessToken || window.MAPBOX_ACCESS_TOKEN || FALLBACK_MAPBOX_TOKEN;
         const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/walking/${responderLongitude},${responderLatitude};${victim.longitude},${victim.latitude}?geometries=geojson&access_token=${token}`;
-        const MAPBOX_ACCESS_TOKEN = window.MAPBOX_ACCESS_TOKEN || "pk.eyJ1IjoicGFvcGFvc2tpZXMiLCJhIjoiY212Z3JydHl3MDJtaDJ3cHh6azRueG1uZCJ9.3DvaMQuDVkc7FiRmkeiLOQ";
 
         const res = await fetch(dirUrl);
         const data = await res.json();
