@@ -69,6 +69,7 @@ async function initializeDashboardSupabase() {
             acceptEmergencyRequest: service.acceptEmergencyRequest,
             cancelEmergencyRequest: service.cancelEmergencyRequest,
             resolveEmergencyRequest: service.resolveEmergencyRequest,
+            cancelAlertRecord: service.cancelAlertRecord,
             updateEmergencyResponderLocation:
               service.updateEmergencyResponderLocation,
             sendBroadcast: service.sendBroadcast,

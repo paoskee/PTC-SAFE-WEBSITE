@@ -4367,7 +4367,20 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-window.addEventListener("hashchange", route);
+// Auto-refresh polling interval every 4 seconds
+setInterval(() => {
+  if (typeof supabaseDashboard?.refreshDashboardData === "function") {
+    supabaseDashboard.refreshDashboardData().then((snapshot) => {
+      if (snapshot && snapshot.emergencyRequests) {
+        supabaseEmergencyRequests = snapshot.emergencyRequests.map(formatEmergencyRequestFromSupabase);
+        window.dispatchEvent(new CustomEvent("safepateros:emergency-requests-updated", {
+          detail: snapshot.emergencyRequests,
+        }));
+        syncSupabaseAlerts();
+      }
+    }).catch(() => {});
+  }
+}, 4000);
 window.addEventListener("beforeunload", () => {
   if (!navigator.geolocation) return;
   emergencyLocationWatchers.forEach((watchId) =>

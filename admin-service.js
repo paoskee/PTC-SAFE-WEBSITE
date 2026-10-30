@@ -1067,6 +1067,24 @@ export async function deleteAlertRecord(alertId) {
   if (error) throw error;
   if (!data?.length) throw new Error("The SOS record no longer exists.");
 }
+export async function cancelAlertRecord(alertId, adminId, reason = "Cancelled by dispatcher") {
+  await requireAdminSession();
+  const now = new Date().toISOString();
+  await updateAlertRow(alertId, {
+    status: "cancelled",
+    cancelled_by: "admin",
+    cancelledBy: "admin",
+    cancellation_reason: reason,
+    cancellationReason: reason,
+    cancelled_at: now,
+    cancelledAt: now,
+    updated_at: now,
+    updatedAt: now,
+    handled_by: adminId,
+    handledBy: adminId,
+  });
+}
+
 
 export async function acceptEmergencyRequest(requestId, responderInfo, adminId) {
   const now = new Date().toISOString();

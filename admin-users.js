@@ -413,15 +413,15 @@ function renderUsers() {
       const specialty = category === "staff"
         ? fieldValue(user, ["staffSpecialty", "staff_specialty", "specialization", "specialty", "staffRole", "jobTitle", "position", "role"])
         : "";
-      return `<tr>
-        <td class="t-main"><strong>${escapeHtml(userName(user))}</strong><span class="block text-xs t-muted">${escapeHtml(user.studentId || user.student_id || user.studentNumber || user.staffId || user.employeeId || user.id)}</span></td>
-        <td>${escapeHtml(category === "other" ? "Other / unspecified" : category === "student" ? "Student" : "Staff")}</td>
-        <td class="t-main">${escapeHtml(email || "—")}</td>
-        <td class="t-main">${escapeHtml(phone || "—")}</td>
-        <td class="t-main">${escapeHtml(program || "—")}</td>
-        <td class="t-main">${escapeHtml(specialty || "—")}</td>
-        <td><span class="badge ${presence.online ? "badge-ok" : "badge-muted"}" data-user-presence="${escapeHtml(user.id)}" title="${presence.lastSeen ? `Last seen ${escapeHtml(new Date(presence.lastSeen).toLocaleString())}` : "No recent presence update"}">${presence.online ? "Online" : "Offline"}</span></td>
-        <td><button class="btn btn-sm" type="button" data-user-location="${escapeHtml(user.id)}" ${location ? "" : "disabled"} aria-label="${location ? `Show last known location of ${escapeHtml(userName(user))} on live map` : `No location available for ${escapeHtml(userName(user))}`}"><i data-lucide="map-pin" class="w-4 h-4"></i> ${location ? "Location" : "No location"}</button></td>
+      return `<tr class="cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors" data-user-row="${escapeHtml(user.id)}">
+        <td class="t-main" data-user-details="${escapeHtml(user.id)}"><strong>${escapeHtml(userName(user))}</strong><span class="block text-xs t-muted">${escapeHtml(user.studentId || user.student_id || user.studentNumber || user.staffId || user.employeeId || user.id)}</span></td>
+        <td data-user-details="${escapeHtml(user.id)}">${escapeHtml(category === "other" ? "Other / unspecified" : category === "student" ? "Student" : "Staff")}</td>
+        <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(email || "—")}</td>
+        <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(phone || "—")}</td>
+        <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(program || "—")}</td>
+        <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(specialty || "—")}</td>
+        <td data-user-details="${escapeHtml(user.id)}"><span class="badge ${presence.online ? "badge-ok" : "badge-muted"}" data-user-presence="${escapeHtml(user.id)}" title="${presence.lastSeen ? `Last seen ${escapeHtml(new Date(presence.lastSeen).toLocaleString())}` : "No recent presence update"}">${presence.online ? "Online" : "Offline"}</span></td>
+        <td><button class="btn btn-sm ${location ? "btn-primary" : ""}" type="button" data-user-location="${escapeHtml(user.id)}" ${location ? "" : "disabled"} aria-label="${location ? `Show last known location of ${escapeHtml(userName(user))} on live map` : `No location available for ${escapeHtml(userName(user))}`}"><i data-lucide="map-pin" class="w-4 h-4"></i> ${location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "No location"}</button></td>
         <td><button class="btn btn-sm" type="button" data-user-details="${escapeHtml(user.id)}">View details</button></td>
       </tr>`;
     }).join("")
@@ -559,9 +559,10 @@ function initializeUsers() {
       }));
       return;
     }
-    const button = event.target.closest("[data-user-details]");
-    if (!button) return;
-    const user = activeUsers().find((item) => item.id === button.dataset.userDetails);
+    const detailsTrigger = event.target.closest("[data-user-details]") || event.target.closest("[data-user-row]");
+    if (!detailsTrigger) return;
+    const userId = detailsTrigger.dataset.userDetails || detailsTrigger.dataset.userRow;
+    const user = activeUsers().find((item) => item.id === userId);
     if (user) renderUserDetails(user);
   });
   byId("user-detail-close").addEventListener("click", closeUserDetails);

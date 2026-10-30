@@ -597,48 +597,81 @@ function renderMap(alert) {
     return;
   }
 
-  const victimPosition = [victim.longitude, victim.latitude];
-  victimMarker = new window.mapboxgl.Marker({ color: "#dc2626" })
-    .setLngLat(victimPosition)
-    .setPopup(
-      new window.mapboxgl.Popup({ offset: 25 }).setText(
-        `SOS location: ${addressOf(alert)}`
-      )
-    )
-    .addTo(map);
-
-  if (hasResponderLocation) {
-    const responderPosition = [responderLongitude, responderLatitude];
-    responderMarker = new window.mapboxgl.Marker({ color: "#2563eb" })
-      .setLngLat(responderPosition)
+    const victimPosition = [victim.longitude, victim.latitude];
+    victimMarker = new window.mapboxgl.Marker({ color: "#dc2626" })
+      .setLngLat(victimPosition)
       .setPopup(
         new window.mapboxgl.Popup({ offset: 25 }).setText(
-          `Responder: ${alert.responderName || "Assigned responder"}`
+          `SOS location: ${addressOf(alert)}`
         )
       )
       .addTo(map);
-    map.addSource("sos-responder-route", {
-      type: "geojson",
-      data: {
-        type: "Feature",
-        properties: {},
-        geometry: {
-          type: "LineString",
-          coordinates: [victimPosition, responderPosition],
-        },
-      },
-    });
-    map.addLayer({
-      id: "sos-responder-route",
-      type: "line",
-      source: "sos-responder-route",
-      paint: { "line-color": "#2563eb", "line-width": 4 },
-    });
-    routeLine = true;
-    map.fitBounds([victimPosition, responderPosition], { padding: 36, maxZoom: 16 });
-  } else {
-    map.flyTo({ center: victimPosition, zoom: 16 });
-  }
+
+    let routeDrawn = false;
+    if (hasResponderLocation) {
+      const responderPosition = [responderLongitude, responderLatitude];
+      responderMarker = new window.mapboxgl.Marker({ color: "#2563eb" })
+        .setLngLat(responderPosition)
+        .setPopup(
+          new window.mapboxgl.Popup({ offset: 25 }).setText(
+            `Responder: ${alert.responderName || "Assigned responder"}`
+          )
+        )
+        .addTo(map);
+
+      // Fetch Mapbox Directions API for street-by-street routing
+      try {
+        const token = window.mapboxgl.accessToken || MAPBOX_ACCESS_TOKEN || "pk.eyJ1IjoicGFvcGFvc2tpZXMiLCJhIjoiY212Z3JydHl3MDJtaDJ3cHh6azRueG1uZCJ9.3DvaMQuDVkc7FiRmkeiLOQ";
+        const dirUrl = `https://api.mapbox.com/directions/v5/mapbox/walking/${responderLongitude},${responderLatitude};${victim.longitude},${victim.latitude}?geometries=geojson&access_token=${token}`;
+        const res = await fetch(dirUrl);
+        const data = await res.json();
+        if (data && data.routes && data.routes[0] && data.routes[0].geometry) {
+          const routeGeoJson = {
+            type: "Feature",
+            properties: {},
+            geometry: data.routes[0].geometry,
+          };
+          map.addSource("sos-responder-route", {
+            type: "geojson",
+            data: routeGeoJson,
+          });
+          map.addLayer({
+            id: "sos-responder-route",
+            type: "line",
+            source: "sos-responder-route",
+            paint: { "line-color": "#2563eb", "line-width": 5, "line-opacity": 0.85 },
+          });
+          routeLine = true;
+          routeDrawn = true;
+        }
+      } catch (e) {
+        console.warn("Mapbox Directions API routing failed, falling back to straight line:", e);
+      }
+
+      if (!routeDrawn) {
+        map.addSource("sos-responder-route", {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            properties: {},
+            geometry: {
+              type: "LineString",
+              coordinates: [victimPosition, responderPosition],
+            },
+          },
+        });
+        map.addLayer({
+          id: "sos-responder-route",
+          type: "line",
+          source: "sos-responder-route",
+          paint: { "line-color": "#2563eb", "line-width": 4 },
+        });
+        routeLine = true;
+      }
+      map.fitBounds([victimPosition, responderPosition], { padding: 36, maxZoom: 16 });
+    } else {
+      map.flyTo({ center: victimPosition, zoom: 16 });
+    }
   window.setTimeout(() => map.resize(), 80);
 }
 
