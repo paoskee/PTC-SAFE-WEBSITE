@@ -17,6 +17,18 @@ let selectedUserId = null;
 let sosLocations = new Map();
 let sosRequests = [];
 let sosAlerts = [];
+let dashboardService = null;
+
+function toast(message, isError = false) {
+  const container = byId("toast-container");
+  if (!container) return;
+  const item = document.createElement("div");
+  item.className = "toast card px-4 py-3 text-sm t-main flex items-center gap-3";
+  item.setAttribute("role", isError ? "alert" : "status");
+  item.innerHTML = `<span class="w-2 h-2 rounded-full shrink-0 ${isError ? 'bg-red-500' : 'bg-emerald-500'}"></span><span class="flex-1">${escapeHtml(message)}</span>`;
+  container.appendChild(item);
+  setTimeout(() => item.remove(), 5000);
+}
 
 function displayValue(value) {
   if (value == null || value === "") return "";
@@ -389,11 +401,47 @@ function renderUsers() {
   const current = activeUsers();
   const students = current.filter((user) => userCategory(user) === "student");
   const staff = current.filter((user) => userCategory(user) === "staff");
+  const pendingStaff = current.filter((user) => {
+    const specialty = user.staffSpecialty ?? user.staff_specialty;
+    const status = (user.staffStatus ?? user.staff_status ?? "none").trim().toLowerCase();
+    return specialty && status === "pending";
+  });
+
   byId("users-student-count").textContent = String(students.length);
   byId("users-staff-count").textContent = String(staff.length);
+  if (byId("users-pending-approvals-count")) {
+    byId("users-pending-approvals-count").textContent = String(pendingStaff.length);
+  }
+  const navUsersCount = byId("nav-users-count");
+  if (navUsersCount) {
+    navUsersCount.textContent = String(pendingStaff.length);
+    navUsersCount.hidden = pendingStaff.length === 0;
+  }
+
   byId("users-student-tab-count").textContent = String(students.length);
   byId("users-staff-tab-count").textContent = String(staff.length);
   byId("users-all-count").textContent = String(current.length);
+
+  const pendingSection = byId("pending-staff-section");
+  const pendingTableBody = byId("pending-staff-table-body");
+  if (pendingSection && pendingTableBody) {
+    pendingSection.hidden = pendingStaff.length === 0;
+    pendingTableBody.innerHTML = pendingStaff.map((user) => {
+      const specialty = fieldValue(user, ["staffSpecialty", "staff_specialty", "specialization", "specialty"]);
+      const email = fieldValue(user, ["email", "emailAddress", "email_address"]);
+      return `<tr>
+        <td class="t-main"><strong>${escapeHtml(userName(user))}</strong></td>
+        <td class="t-main">${escapeHtml(email || "—")}</td>
+        <td class="t-main">${escapeHtml(specialty || "—")}</td>
+        <td>
+          <div class="flex gap-2">
+            <button class="btn btn-sm btn-primary" type="button" data-approve-staff="${escapeHtml(user.id)}">Approve</button>
+            <button class="btn btn-sm btn-danger-ghost" type="button" data-revoke-staff="${escapeHtml(user.id)}">Revoke</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+  }
 
   const query = byId("users-search").value.trim().toLowerCase();
   const filtered = current.filter((user) => {
@@ -413,16 +461,27 @@ function renderUsers() {
       const specialty = category === "staff"
         ? fieldValue(user, ["staffSpecialty", "staff_specialty", "specialization", "specialty", "staffRole", "jobTitle", "position", "role"])
         : "";
+      const staffStatus = (user.staffStatus ?? user.staff_status ?? "none").trim().toLowerCase();
+      let statusBadge = "";
+      if (specialty) {
+        const badgeClass = staffStatus === "approved" ? "badge-ok" : staffStatus === "pending" ? "badge-warning" : staffStatus === "revoked" ? "badge-danger" : "badge-muted";
+        statusBadge = `<span class="badge ${badgeClass} ml-2 capitalize" title="Staff Status: ${escapeHtml(staffStatus)}">${escapeHtml(staffStatus)}</span>`;
+      }
       return `<tr class="cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors" data-user-row="${escapeHtml(user.id)}">
         <td class="t-main" data-user-details="${escapeHtml(user.id)}"><strong>${escapeHtml(userName(user))}</strong><span class="block text-xs t-muted">${escapeHtml(user.studentId || user.student_id || user.studentNumber || user.staffId || user.employeeId || user.id)}</span></td>
         <td data-user-details="${escapeHtml(user.id)}">${escapeHtml(category === "other" ? "Other / unspecified" : category === "student" ? "Student" : "Staff")}</td>
         <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(email || "—")}</td>
         <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(phone || "—")}</td>
         <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(program || "—")}</td>
-        <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(specialty || "—")}</td>
+        <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(specialty || "—")}${statusBadge}</td>
         <td data-user-details="${escapeHtml(user.id)}"><span class="badge ${presence.online ? "badge-ok" : "badge-muted"}" data-user-presence="${escapeHtml(user.id)}" title="${presence.lastSeen ? `Last seen ${escapeHtml(new Date(presence.lastSeen).toLocaleString())}` : "No recent presence update"}">${presence.online ? "Online" : "Offline"}</span></td>
         <td><button class="btn btn-sm ${location ? "btn-primary" : ""}" type="button" data-user-location="${escapeHtml(user.id)}" ${location ? "" : "disabled"} aria-label="${location ? `Show last known location of ${escapeHtml(userName(user))} on live map` : `No location available for ${escapeHtml(userName(user))}`}"><i data-lucide="map-pin" class="w-4 h-4"></i> ${location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "No location"}</button></td>
-        <td><button class="btn btn-sm" type="button" data-user-details="${escapeHtml(user.id)}">View details</button></td>
+        <td>
+          <div class="flex items-center gap-1">
+            <button class="btn btn-sm" type="button" data-user-details="${escapeHtml(user.id)}">View</button>
+            ${specialty ? (staffStatus === "approved" ? `<button class="btn btn-sm btn-danger-ghost" type="button" data-revoke-staff="${escapeHtml(user.id)}">Revoke</button>` : `<button class="btn btn-sm btn-primary" type="button" data-approve-staff="${escapeHtml(user.id)}">Approve</button>`) : ""}
+          </div>
+        </td>
       </tr>`;
     }).join("")
     : `<tr><td colspan="9" class="t-muted">${
@@ -537,7 +596,48 @@ function initializeUsers() {
       renderUsers();
     });
   });
+  const handleStaffStatusChange = async (userId, newStatus) => {
+    if (!dashboardService || typeof dashboardService.setStaffStatus !== "function") {
+      toast("Supabase admin service is not connected.", true);
+      return;
+    }
+    try {
+      await dashboardService.setStaffStatus(userId, newStatus);
+      const user = users.find((u) => u.id === userId);
+      if (user) {
+        user.staffStatus = newStatus;
+        user.staff_status = newStatus;
+      }
+      renderUsers();
+      toast(`Staff status updated to ${newStatus}.`);
+    } catch (error) {
+      console.error("Could not update staff status:", error);
+      toast(`Could not update staff status: ${error.message || "Supabase update failed"}`, true);
+    }
+  };
+
+  const handleTableStaffAction = (event) => {
+    const approveBtn = event.target.closest("[data-approve-staff]");
+    const revokeBtn = event.target.closest("[data-revoke-staff]");
+    if (approveBtn) {
+      event.stopPropagation();
+      handleStaffStatusChange(approveBtn.dataset.approveStaff, "approved");
+      return;
+    }
+    if (revokeBtn) {
+      event.stopPropagation();
+      handleStaffStatusChange(revokeBtn.dataset.revokeStaff, "revoked");
+      return;
+    }
+  };
+
+  const pendingTableEl = byId("pending-staff-table-body");
+  if (pendingTableEl) {
+    pendingTableEl.addEventListener("click", handleTableStaffAction);
+  }
+
   byId("users-table-body").addEventListener("click", (event) => {
+    handleTableStaffAction(event);
     const locationButton = event.target.closest("[data-user-location]");
     if (locationButton) {
       const user = activeUsers().find((item) => item.id === locationButton.dataset.userLocation);
@@ -588,6 +688,7 @@ function initializeUsers() {
   }
 
   window.addEventListener("safepateros:supabase-ready", (event) => {
+    dashboardService = event.detail;
     byId("users-feed-status").textContent = "Loading user profiles from AlertNest…";
     event.detail.subscribeToUsers(
       (nextUsers) => {

@@ -113,6 +113,7 @@
             <a href="#/users" class="nav-link" data-nav="users">
               <i data-lucide="users" class="w-4 h-4"></i
               ><span>Users</span>
+              <span id="nav-users-count" class="nav-count" hidden>0</span>
             </a>
           </li>
         </ul>
@@ -884,7 +885,7 @@
         <!-- VIEW: USERS                                        -->
         <!-- ================================================= -->
         <div data-view="users" hidden class="space-y-5">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <section class="card stat-card">
               <p class="text-sm font-medium t-muted">Students</p>
               <p id="users-student-count" class="stat-value t-main mt-2">0</p>
@@ -893,7 +894,30 @@
               <p class="text-sm font-medium t-muted">Staff</p>
               <p id="users-staff-count" class="stat-value t-main mt-2">0</p>
             </section>
+            <section class="card stat-card">
+              <p class="text-sm font-medium t-muted">Pending Approvals</p>
+              <p id="users-pending-approvals-count" class="stat-value t-main mt-2">0</p>
+            </section>
           </div>
+
+          <section id="pending-staff-section" class="card overflow-hidden" hidden aria-labelledby="pending-staff-title">
+            <div class="card-head">
+              <h2 id="pending-staff-title" class="card-title t-main">Pending staff approvals</h2>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="data-table min-w-[900px]">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Specialty</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="pending-staff-table-body"></tbody>
+              </table>
+            </div>
+          </section>
           <div class="flex flex-wrap items-center gap-3">
             <div class="flex flex-wrap gap-2" role="group" aria-label="Filter users by account category">
               <button class="chip" type="button" data-user-category="all" aria-pressed="true">All <span id="users-all-count">0</span></button>
