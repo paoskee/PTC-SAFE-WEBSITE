@@ -79,52 +79,8 @@ function seedState(center = DEFAULT_CAMPUS_CENTER) {
     },
     settings: { sound: true },
     alerts: [],
-    responders: [
-      {
-        id: "RES-04",
-        name: "R. Villanueva",
-        initials: "RV",
-        phone: "+63 912 345 6789",
-        role: "Medical / EMT",
-        status: "available",
-        location: "ICT Building, 1st Floor",
-        lat: ict.lat + 0.00005,
-        lng: ict.lng + 0.00005,
-      },
-      {
-        id: "RES-07",
-        name: "M. Aquino",
-        initials: "MA",
-        phone: "+63 923 456 7890",
-        role: "Security / SAR",
-        status: "available",
-        location: "Main Gate Area",
-        lat: gate.lat,
-        lng: gate.lng,
-      },
-      {
-        id: "RES-09",
-        name: "L. Dela Cruz",
-        initials: "LD",
-        phone: "+63 934 567 8901",
-        role: "First aid / Nurse",
-        status: "available",
-        location: "Admin Office",
-        lat: admin.lat,
-        lng: admin.lng,
-      },
-      {
-        id: "RES-11",
-        name: "P. Ramos",
-        initials: "PR",
-        phone: "+63 945 678 9012",
-        role: "Security / SAR",
-        status: "offline",
-        location: "Off campus",
-        lat: null,
-        lng: null,
-      },
-    ],
+    // Responders come only from registered Supabase users (see syncRegisteredStaff)
+    responders: [],
     broadcasts: [
       {
         id: "BC-01",
@@ -449,6 +405,8 @@ function loadState() {
             !["SOS-01", "FIRE-01", "SEC-01", "INC-01", "SEC-02"].includes(alert.id)
         ),
         v: 2,
+        // Drop old sample/hand-added responders; registered staff are re-synced from Supabase
+        responders: saved.responders.filter((r) => r && r.staffUser),
         campus: { ...seed.campus, ...saved.campus, center },
         settings: { ...seed.settings, ...saved.settings },
       };
@@ -4145,7 +4103,8 @@ const actions = {
   "alert-details": (el) => openAlertModal(el.dataset.id),
   "dispatch-responder": (el) => dispatchResponder(el.dataset.id),
   "responder-details": (el) => openResponderModal(el.dataset.id),
-  "add-responder": () => openResponderForm(),
+  "add-responder": () =>
+      notify("Responders come from registered users. Set staff_specialty and on-duty in Supabase.", "info"),
   "edit-responder": (el) => openResponderForm(el.dataset.id),
   "toggle-duty": (el) => toggleDuty(el.dataset.id),
   locate: (el) => locateOn(el.dataset.kind, el.dataset.id),
