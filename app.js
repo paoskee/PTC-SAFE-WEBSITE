@@ -80,6 +80,8 @@ function seedState(center = DEFAULT_CAMPUS_CENTER) {
     settings: { sound: true },
     alerts: [],
     // Responders come only from registered Supabase users (see syncRegisteredStaff)
+        // Responders come only from registered Supabase users (see syncRegisteredStaff)
+        // Responders come only from registered Supabase users (see syncRegisteredStaff)
     responders: [],
     broadcasts: [
       {
@@ -407,6 +409,10 @@ function loadState() {
         v: 2,
         // Drop old sample/hand-added responders; registered staff are re-synced from Supabase
         responders: saved.responders.filter((r) => r && r.staffUser),
+        // Drop old sample/hand-added responders; registered staff are re-synced from Supabase
+        responders: saved.responders.filter(r => r && r.staffUser),
+        // Drop old sample/hand-added responders; registered staff are re-synced from Supabase
+        responders: saved.responders.filter(r => r && r.staffUser),
         campus: { ...seed.campus, ...saved.campus, center },
         settings: { ...seed.settings, ...saved.settings },
       };
