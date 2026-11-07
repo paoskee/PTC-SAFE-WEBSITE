@@ -1811,9 +1811,10 @@ function renderLiveList() {
       <p class="text-xs t-muted mt-1">${esc(sub)}</p>
       ${hasPos(item) ? "" : '<p class="text-xs t-faint mt-1">No position on the map</p>'}
     </button>`;
-  const section = (title, rows, empty) =>
-    `<p class="field-label pt-2">${title}</p>` +
-    (rows.length ? rows.join("") : `<p class="text-xs t-muted pb-2">${empty}</p>`);
+  const fill = (id, rows, empty) => {
+    const el = $(id);
+    if (el) el.innerHTML = rows.length ? rows.join("") : `<p class="text-xs t-muted pb-2">${empty}</p>`;
+  };
 
   const incidents = sortedActive().map((a) =>
     card({
@@ -1826,10 +1827,15 @@ function renderLiveList() {
       st: ALERT_STATUS[a.status],
     })
   );
-  const crew = state.responders.map((r) =>
-    card({ kind: "responder", item: r, title: r.name, sub: r.location, st: RESPONDER_STATUS[r.status] })
-  );
-  const services = facilities.map((f) =>
+  const crew = state.responders
+    .filter((r) => r.staffUser)
+    .filter((r) => ui.mapResponderStatus === "all" || r.status === ui.mapResponderStatus)
+    .map((r) =>
+      card({ kind: "responder", item: r, title: r.name, sub: r.location, st: RESPONDER_STATUS[r.status] })
+    );
+  const services = facilities
+    .filter((f) => ui.layers[f.type] && (ui.mapFacilityFilter === "all" || f.type === ui.mapFacilityFilter))
+    .map((f) =>
     card({
       kind: "facility",
       item: f,
@@ -1847,10 +1853,9 @@ function renderLiveList() {
       ? "Nearby services could not be loaded."
       : "None found within the search radius.";
 
-  $("live-list").innerHTML =
-    section("Incidents", incidents, "No active incidents.") +
-    section("Responders", crew, "No responders yet.") +
-    section("Nearby emergency services", services, servicesEmpty);
+  fill("live-box-a", incidents, "No active incidents.");
+  fill("live-box-b", crew, "No promoted responders match this filter.");
+  fill("live-box-c", services, servicesEmpty);
 }
 
 function renderBroadcastHistory() {

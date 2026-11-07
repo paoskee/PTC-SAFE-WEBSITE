@@ -605,10 +605,10 @@
         <!-- ================================================= -->
         <!-- VIEW: LIVE MAP                                     -->
         <!-- ================================================= -->
-        <div data-view="map" hidden>
-          <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <div data-view="map" hidden class="space-y-6">
+          <div>
             <section
-              class="xl:col-span-9 card flex flex-col overflow-hidden"
+              class="card flex flex-col overflow-hidden"
               aria-label="Live map"
             >
               <div class="card-head">
@@ -653,22 +653,6 @@
                   >
                     Fire stations
                   </button>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t line">
-                  <span class="text-xs t-muted font-medium mr-1">Filter facilities:</span>
-                  <select class="input text-xs py-1 sm:w-36" data-bind="mapFacilityFilter" aria-label="Filter facilities on map">
-                    <option value="all">All facilities</option>
-                    <option value="hospital">Hospitals</option>
-                    <option value="police">Police stations</option>
-                    <option value="fire_station">Fire stations</option>
-                  </select>
-                  <span class="text-xs t-muted font-medium ml-2 mr-1">Filter responders:</span>
-                  <select class="input text-xs py-1 sm:w-36" data-bind="mapResponderStatus" aria-label="Filter responders on map">
-                    <option value="all">All responders</option>
-                    <option value="available">Online (Available)</option>
-                    <option value="offline">Offline / Off duty</option>
-                    <option value="responding">Responding</option>
-                  </select>
                 </div>
                 <div class="flex flex-wrap items-center justify-end gap-1">
                   <button
@@ -717,20 +701,41 @@
                 class="relative h-[55vh] min-h-[20rem] sm:min-h-[26rem]"
               ></div>
             </section>
+          </div>
 
-            <section
-              class="xl:col-span-3 card flex flex-col"
-              aria-labelledby="live-list-title"
-            >
+          <!-- Three independent boxes: A incidents, B promoted responders, C nearest services -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+            <section class="card flex flex-col min-w-0 h-[30rem]" aria-labelledby="box-a-title">
               <div class="card-head">
-                <h2 id="live-list-title" class="card-title t-main">
-                  On the map
-                </h2>
+                <h2 id="box-a-title" class="card-title t-main">Active incidents</h2>
               </div>
-              <div
-                id="live-list"
-                class="p-4 space-y-2 overflow-y-auto max-h-[60vh]"
-              ></div>
+              <div id="live-box-a" class="p-4 space-y-2 overflow-y-auto flex-1 min-h-0"></div>
+            </section>
+
+            <section class="card flex flex-col min-w-0 h-[30rem]" aria-labelledby="box-b-title">
+              <div class="card-head flex flex-wrap items-center justify-between gap-2">
+                <h2 id="box-b-title" class="card-title t-main">Promoted responders</h2>
+                <select class="input text-xs py-1 w-40 max-w-full" data-bind="mapResponderStatus" aria-label="Filter responders on map">
+                  <option value="all">All responders</option>
+                  <option value="available">Online (Available)</option>
+                  <option value="offline">Offline / Off duty</option>
+                  <option value="responding">Responding</option>
+                </select>
+              </div>
+              <div id="live-box-b" class="p-4 space-y-2 overflow-y-auto flex-1 min-h-0"></div>
+            </section>
+
+            <section class="card flex flex-col min-w-0 h-[30rem]" aria-labelledby="box-c-title">
+              <div class="card-head flex flex-wrap items-center justify-between gap-2">
+                <h2 id="box-c-title" class="card-title t-main">Nearest services</h2>
+                <select class="input text-xs py-1 w-40 max-w-full" data-bind="mapFacilityFilter" aria-label="Filter facilities on map">
+                  <option value="all">All facilities</option>
+                  <option value="hospital">Hospitals</option>
+                  <option value="police">Police stations</option>
+                  <option value="fire_station">Fire stations</option>
+                </select>
+              </div>
+              <div id="live-box-c" class="p-4 space-y-2 overflow-y-auto flex-1 min-h-0"></div>
             </section>
           </div>
         </div>
