@@ -83,6 +83,8 @@ async function initializeDashboardSupabase() {
             refreshDashboardData: service.refreshDashboardData,
             getActiveAlerts: service.getActiveAlerts,
             getStaffResponders: service.getStaffResponders,
+            promoteToResponder: service.promoteToResponder,
+            demoteResponder: service.demoteResponder,
             acceptAndDispatchAlert: service.acceptAndDispatchAlert,
             dispatchSOSRecord: service.dispatchSOSRecord,
             updateSOSRecordStatus: service.updateSOSRecordStatus,

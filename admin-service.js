@@ -803,6 +803,35 @@ export async function refreshDashboardData() {
   };
 }
 
+// Admin-only: turn a registered student into a responder (or back). Students cannot do this to themselves,
+// because the database guard on public.users only lets admins change role / staff_specialty / is_on_duty.
+export async function promoteToResponder(userId, specialty) {
+  const clean = String(specialty || "").trim();
+  if (!userId || !clean) throw new Error("Choose a specialty for the responder.");
+  const { data, error } = await client()
+    .from("users")
+    .update({ role: "Responder", staff_specialty: clean, is_on_duty: true })
+    .eq("id", userId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("No account was updated. Check that you are signed in as an admin.");
+  return data;
+}
+
+export async function demoteResponder(userId) {
+  if (!userId) throw new Error("Missing user id.");
+  const { data, error } = await client()
+    .from("users")
+    .update({ role: "Student", staff_specialty: null, is_on_duty: false, is_online: false })
+    .eq("id", userId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("No account was updated. Check that you are signed in as an admin.");
+  return data;
+}
+
 export async function getStaffResponders() {
   const { data, error } = await client().from("users").select("*");
   if (error) throw error;

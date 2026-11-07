@@ -372,6 +372,37 @@ function userCategory(user) {
   return "other";
 }
 
+const RESPONDER_SPECIALTIES = ["Medical / EMT", "Security / SAR", "First aid / Nurse", "Fire / Rescue", "Responder"];
+
+function isResponderUser(user) {
+  const isAdminUser = user.isAdmin === true || user.is_admin === true;
+  const specialty = String(user.staffSpecialty ?? user.staff_specialty ?? "").trim();
+  return !isAdminUser && specialty.length > 0;
+}
+
+function askResponderSpecialty(name) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4";
+    overlay.innerHTML = `<div class="card p-5 w-full max-w-sm space-y-4" role="dialog" aria-modal="true" aria-label="Make responder">
+      <h2 class="card-title t-main">Make ${escapeHtml(name)} a responder?</h2>
+      <p class="field-hint">They will see the responder screen the next time they log in, and appear on the Responders page.</p>
+      <label class="block text-sm t-main">Specialization
+        <select class="input mt-1 w-full" data-specialty>${RESPONDER_SPECIALTIES.map((item) => `<option>${escapeHtml(item)}</option>`).join("")}</select>
+      </label>
+      <div class="flex justify-end gap-2">
+        <button class="btn btn-sm" type="button" data-cancel>Cancel</button>
+        <button class="btn btn-sm btn-primary" type="button" data-confirm>Make responder</button>
+      </div></div>`;
+    const done = (value) => { overlay.remove(); resolve(value); };
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay || event.target.closest("[data-cancel]")) done(null);
+      if (event.target.closest("[data-confirm]")) done(overlay.querySelector("[data-specialty]").value);
+    });
+    document.body.appendChild(overlay);
+  });
+}
+
 function isActiveUser(user) {
   if (
     user.isActive === false ||
@@ -401,16 +432,13 @@ function renderUsers() {
   const current = activeUsers();
   const students = current.filter((user) => userCategory(user) === "student");
   const staff = current.filter((user) => userCategory(user) === "staff");
-  const pendingStaff = current.filter((user) => {
-    const specialty = user.staffSpecialty ?? user.staff_specialty;
-    const status = (user.staffStatus ?? user.staff_status ?? "none").trim().toLowerCase();
-    return specialty && status === "pending";
-  });
+  const responders = current.filter(isResponderUser);
+  const pendingStaff = [];
 
   byId("users-student-count").textContent = String(students.length);
   byId("users-staff-count").textContent = String(staff.length);
   if (byId("users-pending-approvals-count")) {
-    byId("users-pending-approvals-count").textContent = String(pendingStaff.length);
+    byId("users-pending-approvals-count").textContent = String(responders.length);
   }
   const navUsersCount = byId("nav-users-count");
   if (navUsersCount) {
@@ -461,12 +489,9 @@ function renderUsers() {
       const specialty = category === "staff"
         ? fieldValue(user, ["staffSpecialty", "staff_specialty", "specialization", "specialty", "staffRole", "jobTitle", "position", "role"])
         : "";
-      const staffStatus = (user.staffStatus ?? user.staff_status ?? "none").trim().toLowerCase();
-      let statusBadge = "";
-      if (specialty) {
-        const badgeClass = staffStatus === "approved" ? "badge-ok" : staffStatus === "pending" ? "badge-warning" : staffStatus === "revoked" ? "badge-danger" : "badge-muted";
-        statusBadge = `<span class="badge ${badgeClass} ml-2 capitalize" title="Staff Status: ${escapeHtml(staffStatus)}">${escapeHtml(staffStatus)}</span>`;
-      }
+      const responder = isResponderUser(user);
+      const isAdminUser = user.isAdmin === true || user.is_admin === true;
+      const statusBadge = responder ? '<span class="badge badge-ok ml-2">Responder</span>' : "";
       return `<tr class="cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors" data-user-row="${escapeHtml(user.id)}">
         <td class="t-main" data-user-details="${escapeHtml(user.id)}"><strong>${escapeHtml(userName(user))}</strong><span class="block text-xs t-muted">${escapeHtml(user.studentId || user.student_id || user.studentNumber || user.staffId || user.employeeId || user.id)}</span></td>
         <td data-user-details="${escapeHtml(user.id)}">${escapeHtml(category === "other" ? "Other / unspecified" : category === "student" ? "Student" : "Staff")}</td>
@@ -479,7 +504,9 @@ function renderUsers() {
         <td>
           <div class="flex items-center gap-1">
             <button class="btn btn-sm" type="button" data-user-details="${escapeHtml(user.id)}">View</button>
-            ${specialty ? (staffStatus === "approved" ? `<button class="btn btn-sm btn-danger-ghost" type="button" data-revoke-staff="${escapeHtml(user.id)}">Revoke</button>` : `<button class="btn btn-sm btn-primary" type="button" data-approve-staff="${escapeHtml(user.id)}">Approve</button>`) : ""}
+            ${isAdminUser ? "" : responder
+              ? `<button class="btn btn-sm btn-danger-ghost" type="button" data-demote-responder="${escapeHtml(user.id)}">Remove responder</button>`
+              : `<button class="btn btn-sm btn-primary" type="button" data-promote-responder="${escapeHtml(user.id)}">Make responder</button>`}
           </div>
         </td>
       </tr>`;
@@ -596,38 +623,43 @@ function initializeUsers() {
       renderUsers();
     });
   });
-  const handleStaffStatusChange = async (userId, newStatus) => {
-    if (!dashboardService || typeof dashboardService.setStaffStatus !== "function") {
+  const handleResponderChange = async (userId, promote) => {
+    const target = users.find((u) => u.id === userId);
+    if (!target) return;
+    if (!dashboardService || typeof dashboardService.promoteToResponder !== "function") {
       toast("Supabase admin service is not connected.", true);
       return;
     }
     try {
-      await dashboardService.setStaffStatus(userId, newStatus);
-      const user = users.find((u) => u.id === userId);
-      if (user) {
-        user.staffStatus = newStatus;
-        user.staff_status = newStatus;
+      if (promote) {
+        const specialty = await askResponderSpecialty(userName(target));
+        if (!specialty) return;
+        await dashboardService.promoteToResponder(userId, specialty);
+        Object.assign(target, { role: "Responder", staff_specialty: specialty, staffSpecialty: specialty, is_on_duty: true, isOnDuty: true });
+        toast(`${userName(target)} is now a responder (${specialty}).`);
+      } else {
+        if (!window.confirm(`Remove ${userName(target)} as a responder? They will become a regular student account.`)) return;
+        await dashboardService.demoteResponder(userId);
+        Object.assign(target, { role: "Student", staff_specialty: null, staffSpecialty: null, is_on_duty: false, isOnDuty: false });
+        toast(`${userName(target)} is no longer a responder.`);
       }
       renderUsers();
-      toast(`Staff status updated to ${newStatus}.`);
+      publishResponderProfiles(true);
     } catch (error) {
-      console.error("Could not update staff status:", error);
-      toast(`Could not update staff status: ${error.message || "Supabase update failed"}`, true);
+      console.error("Could not update responder status:", error);
+      toast(`Could not update responder: ${error.message || "Supabase update failed"}`, true);
     }
   };
 
   const handleTableStaffAction = (event) => {
-    const approveBtn = event.target.closest("[data-approve-staff]");
-    const revokeBtn = event.target.closest("[data-revoke-staff]");
-    if (approveBtn) {
+    const promoteBtn = event.target.closest("[data-promote-responder]");
+    const demoteBtn = event.target.closest("[data-demote-responder]");
+    if (promoteBtn) {
       event.stopPropagation();
-      handleStaffStatusChange(approveBtn.dataset.approveStaff, "approved");
-      return;
-    }
-    if (revokeBtn) {
+      handleResponderChange(promoteBtn.dataset.promoteResponder, true);
+    } else if (demoteBtn) {
       event.stopPropagation();
-      handleStaffStatusChange(revokeBtn.dataset.revokeStaff, "revoked");
-      return;
+      handleResponderChange(demoteBtn.dataset.demoteResponder, false);
     }
   };
 
