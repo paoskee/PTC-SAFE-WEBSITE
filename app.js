@@ -675,6 +675,8 @@ const ui = {
   incQuery: "",
   respQuery: "",
   respStatus: "all",
+  mapFacilityFilter: "all",
+  mapResponderStatus: "all",
   layers: { alerts: true, responders: true, hospital: true, police: true, fire_station: true },
 };
 let currentView = "dashboard";
@@ -1000,10 +1002,12 @@ function mapItems() {
       .filter(isActive)
       .forEach((a) => hasPos(a) && items.push({ kind: "alert", item: a }));
   if (ui.layers.responders)
-    state.responders.forEach(
-      (r) => hasPos(r) && items.push({ kind: "responder", item: r })
-    );
-  if (ui.layers.responders)
+    state.responders
+      .filter((r) => ui.mapResponderStatus === "all" || r.status === ui.mapResponderStatus)
+      .forEach(
+        (r) => hasPos(r) && items.push({ kind: "responder", item: r })
+      );
+  if (ui.layers.responders && (ui.mapResponderStatus === "all" || ui.mapResponderStatus === "responding"))
     state.alerts
       .filter(
         (alert) =>
@@ -1038,7 +1042,9 @@ function mapItems() {
   if (selectedUserMapLocation) {
     items.push({ kind: "user", item: selectedUserMapLocation });
   }
-  facilities.forEach((f) => ui.layers[f.type] && items.push({ kind: "facility", item: f }));
+  facilities
+    .filter((f) => ui.layers[f.type] && (ui.mapFacilityFilter === "all" || f.type === ui.mapFacilityFilter))
+    .forEach((f) => items.push({ kind: "facility", item: f }));
   return items;
 }
 const schoolItem = () => ({ id: "school", name: state.campus.name, ...state.campus.center });
@@ -4293,6 +4299,9 @@ function onFieldChange(event) {
   if (el.dataset && el.dataset.bind) {
     ui[el.dataset.bind] = el.value;
     renderLists();
+    if (el.dataset.bind === "mapFacilityFilter" || el.dataset.bind === "mapResponderStatus") {
+      renderMap();
+    }
   }
   if (
     el.id === "bc-message" ||
