@@ -738,6 +738,10 @@ function initMapboxMap() {
     renderMap();
     refreshMapSize();
     flyToPendingRealtimeLocation();
+    if (!gFitted) {
+      gFitted = true;
+      centerOnSchool();
+    }
     if (facilitiesState === "idle") loadFacilities();
   });
   mapboxMap.on("error", (event) => {
@@ -1042,26 +1046,15 @@ const schoolItem = () => ({ id: "school", name: state.campus.name, ...state.camp
 // The school stays in the middle: the view is widened evenly on every side until the
 // farthest visible pin fits, so the map is always centered on the campus.
 function fitMap() {
+  // Free movement: do not lock or override user panning/zooming.
+  // The map stays centered on the school only on initial load or when clicking "Center to school" / "Show all".
   if (mapMode !== "mapbox" || !mapboxMap) {
     mapZoom = 1;
     $("map-canvas").style.transform = "";
     return;
   }
-  if (!$("map-host").offsetWidth) return; // map is on a hidden page; try again when it is shown
-  gFitted = true;
-  const c = state.campus.center;
-  let dLat = 0.0006,
-    dLng = 0.0006; // always show at least the campus itself
-  mapItems().forEach(({ item }) => {
-    dLat = Math.max(dLat, Math.abs(item.lat - c.lat));
-    dLng = Math.max(dLng, Math.abs(item.lng - c.lng));
-  });
-  const bounds = new window.mapboxgl.LngLatBounds(
-    [c.lng - dLng, c.lat - dLat],
-    [c.lng + dLng, c.lat + dLat]
-  );
-  mapboxMap.fitBounds(bounds, { padding: 56, maxZoom: 19 });
 }
+
 
 function centerOnSchool() {
   if (mapMode === "mapbox" && mapboxMap) {
