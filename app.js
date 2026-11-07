@@ -1208,6 +1208,7 @@ function handleRealtimeSOS(alerts, { notifyUser = true } = {}) {
       : `${alerts.length} people`;
     notify(`New SOS received from ${name}.`, "error");
   }
+  navigate("alerts");
 }
 
 // One pin look for both the Mapbox map and the simulated map
