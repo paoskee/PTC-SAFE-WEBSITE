@@ -408,11 +408,7 @@ function loadState() {
         ),
         v: 2,
         // Drop old sample/hand-added responders; registered staff are re-synced from Supabase
-        responders: saved.responders.filter((r) => r && r.staffUser),
-        // Drop old sample/hand-added responders; registered staff are re-synced from Supabase
-        responders: saved.responders.filter(r => r && r.staffUser),
-        // Drop old sample/hand-added responders; registered staff are re-synced from Supabase
-        responders: saved.responders.filter(r => r && r.staffUser),
+        responders: (saved.responders || []).filter((r) => r && r.staffUser),
         campus: { ...seed.campus, ...saved.campus, center },
         settings: { ...seed.settings, ...saved.settings },
       };
@@ -4611,4 +4607,4 @@ setInterval(() => {
     el.textContent = fmtAgo(Number(el.dataset.since));
   });
   renderStats();
-}, 30000);  
+}, 30000);
