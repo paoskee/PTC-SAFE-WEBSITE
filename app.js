@@ -1196,14 +1196,6 @@ function collectNewActiveIncidents(records, previousIds) {
 
 function handleRealtimeSOS(alerts, { notifyUser = true } = {}) {
   if (!alerts.length) return;
-  const located = alerts.filter(hasPos);
-  if (located.length) {
-    const latestAlert = located[located.length - 1];
-    flyToLocation(latestAlert.lng, latestAlert.lat, 16, "dashboard");
-  } else {
-    navigate("dashboard");
-    console.warn("New realtime SOS alert has no valid coordinates.", alerts);
-  }
   if (notifyUser) {
     const name = alerts.length === 1
       ? alerts[0].userName || alerts[0].reportedBy || "Unknown user"
@@ -4537,7 +4529,6 @@ window.addEventListener("safepateros:supabase-ready", (event) => {
               time: reportedAt,
             }
           );
-          flyToLocation(incident.lng, incident.lat, 16, "dashboard");
         });
         if (newIncidents.length) {
           notify(
