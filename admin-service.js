@@ -1127,6 +1127,27 @@ export async function deleteAlertRecord(alertId) {
   if (error) throw error;
   if (!data?.length) throw new Error("The SOS record no longer exists.");
 }
+
+export async function deleteBroadcastRecord(broadcastId) {
+  await requireAdminSession();
+  const { data, error } = await client()
+    .from("broadcasts")
+    .delete()
+    .eq("id", broadcastId)
+    .select("id");
+  if (error) throw error;
+  if (!data?.length) throw new Error("The broadcast record no longer exists.");
+}
+
+export async function deleteAllBroadcasts() {
+  await requireAdminSession();
+  const { error } = await client()
+    .from("broadcasts")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000");
+  if (error) throw error;
+}
+
 export async function cancelAlertRecord(alertId, adminId, reason = "Cancelled by dispatcher") {
   await requireAdminSession();
   const now = new Date().toISOString();

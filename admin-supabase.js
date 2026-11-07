@@ -99,6 +99,8 @@ async function initializeDashboardSupabase() {
             cancelAlertRecord: service.cancelAlertRecord,
             updateEmergencyResponderLocation:
               service.updateEmergencyResponderLocation,
+            deleteBroadcastRecord: service.deleteBroadcastRecord,
+            deleteAllBroadcasts: service.deleteAllBroadcasts,
             sendBroadcast: service.sendBroadcast,
             adminId: user.id,
             signOut: async () => {

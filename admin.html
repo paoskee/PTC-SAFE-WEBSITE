@@ -1088,10 +1088,19 @@
               class="xl:col-span-2 card flex flex-col"
               aria-labelledby="bc-history-title"
             >
-              <div class="card-head">
+              <div class="card-head flex items-center justify-between">
                 <h2 id="bc-history-title" class="card-title t-main">
                   Sent broadcasts
                 </h2>
+                <button
+                  type="button"
+                  id="btn-clear-all-broadcasts"
+                  class="btn btn-danger-ghost btn-sm"
+                  data-action="clear-all-broadcasts"
+                  hidden
+                >
+                  <i data-lucide="trash-2" class="w-4 h-4"></i> Clear All History
+                </button>
               </div>
               <div
                 id="broadcast-history"

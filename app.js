@@ -1852,20 +1852,35 @@ function renderLiveList() {
 
 function renderBroadcastHistory() {
   const list = [...state.broadcasts].sort((a, b) => b.sentAt - a.sentAt);
+  const clearBtn = $("btn-clear-all-broadcasts");
+  if (clearBtn) clearBtn.hidden = list.length === 0;
+
   $("broadcast-history").innerHTML = list.length
     ? list
         .map(
           (b) => `
-           <div class="p-4 rounded-xl border line surface-2">
-               <div class="flex items-center justify-between gap-2">
-                   ${badge(
-                     LEVEL_META[b.level] ? LEVEL_META[b.level].badge : "badge-info",
-                     LEVEL_META[b.level] ? LEVEL_META[b.level].label : "Notice"
-                   )}
-                   <span class="text-xs t-muted">${fmtDateTime(b.sentAt)}</span>
+           <div class="p-4 rounded-xl border line surface-2 flex items-start justify-between gap-3">
+               <div class="min-w-0 flex-1">
+                   <div class="flex items-center justify-between gap-2">
+                       ${badge(
+                         LEVEL_META[b.level] ? LEVEL_META[b.level].badge : "badge-info",
+                         LEVEL_META[b.level] ? LEVEL_META[b.level].label : "Notice"
+                       )}
+                       <span class="text-xs t-muted">${fmtDateTime(b.sentAt)}</span>
+                   </div>
+                   <p class="text-sm t-main mt-2">${esc(b.message)}</p>
+                   <p class="text-xs t-muted mt-2">Published to ${esc(b.audience)}</p>
                </div>
-               <p class="text-sm t-main mt-2">${esc(b.message)}</p>
-               <p class="text-xs t-muted mt-2">Published to ${esc(b.audience)}</p>
+               <button
+                 type="button"
+                 class="icon-btn text-red-500 hover:bg-red-500/10 shrink-0 mt-1"
+                 data-action="delete-broadcast"
+                 data-id="${esc(b.id)}"
+                 title="Delete broadcast"
+                 aria-label="Delete broadcast"
+               >
+                 <i data-lucide="trash-2" class="w-4 h-4"></i>
+               </button>
            </div>`
         )
         .join("")
@@ -1873,7 +1888,59 @@ function renderBroadcastHistory() {
         "Nothing sent yet",
         "Broadcasts you send will be listed here."
       );
+  if (window.lucide && typeof window.lucide.createIcons === "function") {
+    window.lucide.createIcons();
+  }
 }
+
+async function deleteBroadcast(broadcastId) {
+  if (!supabaseDashboard || typeof supabaseDashboard.deleteBroadcastRecord !== "function") {
+    notify("Supabase broadcast deletion is unavailable.", "error");
+    return;
+  }
+  const confirmed = await window.safepaterosConfirm({
+    title: "Delete broadcast?",
+    message: "Are you sure you want to delete this broadcast? This cannot be undone.",
+    confirmLabel: "Delete broadcast",
+  });
+  if (!confirmed) return;
+
+  try {
+    await supabaseDashboard.deleteBroadcastRecord(broadcastId);
+    state.broadcasts = state.broadcasts.filter((b) => b.id !== broadcastId);
+    save();
+    renderBroadcastHistory();
+    notify("Broadcast deleted successfully.", "success");
+  } catch (error) {
+    console.error("Failed to delete broadcast:", error);
+    notify(`Could not delete broadcast: ${error.message || "Supabase error"}`, "error");
+  }
+}
+
+async function clearAllBroadcasts() {
+  if (!supabaseDashboard || typeof supabaseDashboard.deleteAllBroadcasts !== "function") {
+    notify("Supabase broadcast deletion is unavailable.", "error");
+    return;
+  }
+  const confirmed = await window.safepaterosConfirm({
+    title: "Clear all sent broadcasts?",
+    message: "Are you sure you want to clear/delete all sent broadcast history? This cannot be undone.",
+    confirmLabel: "Clear all history",
+  });
+  if (!confirmed) return;
+
+  try {
+    await supabaseDashboard.deleteAllBroadcasts();
+    state.broadcasts = [];
+    save();
+    renderBroadcastHistory();
+    notify("All broadcast history cleared successfully.", "success");
+  } catch (error) {
+    console.error("Failed to clear broadcast history:", error);
+    notify(`Could not clear broadcast history: ${error.message || "Supabase error"}`, "error");
+  }
+}
+
 
 function formatBroadcastFromSupabase(broadcast) {
   const urgency = String(broadcast.urgency || "").toLowerCase();
@@ -4128,6 +4195,8 @@ const actions = {
     save();
     renderNotifications();
   },
+  "delete-broadcast": (el) => deleteBroadcast(el.dataset.id),
+  "clear-all-broadcasts": () => clearAllBroadcasts(),
   "bc-template": (el) => {
     const t = BROADCAST_TEMPLATES.find((x) => x.key === el.dataset.key);
     if (!t) return;
