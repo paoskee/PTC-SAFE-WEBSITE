@@ -4106,6 +4106,7 @@ function renderLists() {
   renderAlertsFull();
   renderIncidents();
   renderRespondersFull();
+  renderLiveList();
   icons();
 }
 
