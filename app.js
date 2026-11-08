@@ -581,9 +581,9 @@ function staffResponderFromProfile(profile) {
   const normalizedDuty = String(dutyValueRaw ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
   const explicitOnDuty = typeof dutyValueRaw === "boolean"
     ? dutyValueRaw
-    : ["true", "1", "on_duty", "on_shift", "available", "active", "responding"].includes(normalizedDuty)
+    : ["true", "1", "on", "yes", "on_duty", "on_shift", "available", "active", "responding"].includes(normalizedDuty)
       ? true
-      : ["false", "0", "off_duty", "off_shift", "inactive", "unavailable"].includes(normalizedDuty)
+      : ["false", "0", "off", "no", "off_duty", "off_shift", "inactive", "unavailable"].includes(normalizedDuty)
         ? false
         : null;
   const profileAssignment = profileValue(profile, [
@@ -629,7 +629,7 @@ function staffResponderFromProfile(profile) {
   const responding =
     Boolean(assignedAlert || hasProfileAssignment) ||
     ["responding", "assigned", "busy", "en route", "in progress"].includes(dutyValue);
-  const isOnDuty = explicitOnDuty ?? (!offDuty && Boolean(dutyValue));
+  const isOnDuty = explicitOnDuty ?? (isOnline ? true : (!offDuty && Boolean(dutyValue)));
   const status = responding
     ? "responding"
     : isOnline && isOnDuty
