@@ -258,18 +258,8 @@ function onlineState(user) {
 }
 
 function locationForUser(user) {
-  const presence = profilePresence(user);
-  const liveLocation = coordinates(user.current_location) ||
-    coordinates(user.currentLocation) ||
-    coordinates(user.location) ||
-    coordinates(user);
-  const lastKnownLocation = coordinates(user.last_known_location) ||
-    coordinates(user.lastKnownLocation) ||
-    coordinates(user.last_location) ||
-    coordinates(user.lastLocation);
-  const profile = presence.online && presence.onDuty === true
-    ? liveLocation || profileLocation(user)
-    : lastKnownLocation || profileLocation(user);
+  const profileLat = user.last_known_lat;
+  const profileLng = user.last_known_lng;
   const profileUpdatedAt = timestampMillis(
     findField(user, [
       "location_updated_at",
@@ -283,9 +273,36 @@ function locationForUser(user) {
     ])
   );
   const fromSOS = sosLocations.get(user.id);
-  if (fromSOS && (!profile || fromSOS.updatedAt > (profileUpdatedAt ?? -Infinity))) {
+
+  if (isValidCoordinate(profileLat) && isValidCoordinate(profileLng)) {
+    const lat = Number(profileLat);
+    const lng = Number(profileLng);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && !(lat === 0 && lng === 0)) {
+      return { lat, lng, updatedAt: profileUpdatedAt, source: "profile" };
+    }
+  }
+
+  const liveLocation = coordinates(user.current_location) ||
+    coordinates(user.currentLocation) ||
+    coordinates(user.location) ||
+    coordinates(user);
+  const lastKnownLocation = coordinates(user.last_known_location) ||
+    coordinates(user.lastKnownLocation) ||
+    coordinates(user.last_location) ||
+    coordinates(user.lastLocation);
+  const presence = profilePresence(user);
+  const profile = presence.online && presence.onDuty === true
+    ? liveLocation || profileLocation(user)
+    : lastKnownLocation || profileLocation(user);
+
+  if (profile && isValidCoordinate(profile.lat) && isValidCoordinate(profile.lng)) {
+    return { ...profile, updatedAt: profileUpdatedAt, source: "profile" };
+  }
+
+  if (fromSOS && isValidCoordinate(fromSOS.lat) && isValidCoordinate(fromSOS.lng)) {
     return fromSOS;
   }
+
   return profile ? { ...profile, updatedAt: profileUpdatedAt, source: "profile" } : fromSOS || null;
 }
 

@@ -78,8 +78,12 @@ function publicUserProfile(row) {
 }
 
 function reportError(onError, error) {
+  if (error && error.stack) {
+    console.error("Supabase subscription error stack:", error.stack);
+  } else {
+    console.error("Supabase subscription failed:", error);
+  }
   if (onError) onError(error);
-  else console.error("Supabase subscription failed.", error);
 }
 
 const locallyPublishedBroadcastIds = new Set();

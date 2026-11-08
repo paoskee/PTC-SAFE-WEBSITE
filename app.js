@@ -534,14 +534,10 @@ function staffResponderFromProfile(profile) {
   const validLastKnown = isValidCoordinate(rawLastKnownLat) && isValidCoordinate(rawLastKnownLng);
   const validResponder = isValidCoordinate(rawResponderLat) && isValidCoordinate(rawResponderLng);
 
-  if (!validLastKnown && !validResponder) {
-    return null;
-  }
+  const lat = validLastKnown ? Number(rawLastKnownLat) : validResponder ? Number(rawResponderLat) : null;
+  const lng = validLastKnown ? Number(rawLastKnownLng) : validResponder ? Number(rawResponderLng) : null;
 
-  const lat = validLastKnown ? Number(rawLastKnownLat) : Number(rawResponderLat);
-  const lng = validLastKnown ? Number(rawLastKnownLng) : Number(rawResponderLng);
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180 || (lat === 0 && lng === 0)) {
+  if (lat === null || lng === null || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180 || (lat === 0 && lng === 0)) {
     return null;
   }
 
@@ -2397,7 +2393,17 @@ function syncSupabaseAlerts({ renderDashboard = true } = {}) {
     syncRegisteredStaff(registeredStaffProfiles);
   }
   gFitted = false;
-  if (renderDashboard) render();
+  if (renderDashboard) {
+    try {
+      render();
+    } catch (renderError) {
+      console.error("[RENDER-ERROR]", renderError);
+      if (renderError && renderError.stack) {
+        console.error(renderError.stack);
+      }
+      notify(`Dashboard update error: ${renderError.message || "Render failure"}`, "error");
+    }
+  }
 }
 
 function renderNotifications() {
