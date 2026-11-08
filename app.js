@@ -519,15 +519,22 @@ function staffResponderFromProfile(profile) {
   const location = profileValue(profile, [
     "locationName", "campusLocation", "baseLocation", "building", "location",
   ]) || (previous && previous.location) || "Location unavailable";
-  const latitude = profileValue(profile, ["lat", "latitude"]);
-  const longitude = profileValue(profile, ["lng", "longitude"]);
-  const directPosition = locationFromRecord(profile);
-  const livePosition =
-    locationFromRecord(profileField(profile, ["current_location", "currentLocation", "live_location", "liveLocation"])) ||
-    directPosition;
-  const lastKnownPosition =
-    locationFromRecord(profileField(profile, ["last_known_location", "lastKnownLocation", "last_location", "lastLocation"])) ||
-    directPosition;
+  
+  const lastKnownLat = profile.last_known_lat !== undefined ? Number(profile.last_known_lat) : NaN;
+  const lastKnownLng = profile.last_known_lng !== undefined ? Number(profile.last_known_lng) : NaN;
+  const responderLat = profile.responder_lat !== undefined ? Number(profile.responder_lat) : NaN;
+  const responderLng = profile.responder_lng !== undefined ? Number(profile.responder_lng) : NaN;
+
+  const validLastKnown = Number.isFinite(lastKnownLat) && Number.isFinite(lastKnownLng) && lastKnownLat >= -90 && lastKnownLat <= 90 && lastKnownLng >= -180 && lastKnownLng <= 180;
+  const validResponder = Number.isFinite(responderLat) && Number.isFinite(responderLng) && responderLat >= -90 && responderLat <= 90 && responderLng >= -180 && responderLng <= 180;
+
+  if (!validLastKnown && !validResponder) {
+    return null;
+  }
+
+  const lat = validLastKnown ? lastKnownLat : responderLat;
+  const lng = validLastKnown ? lastKnownLng : responderLng;
+
   const onlineValue = profileField(profile, ["is_online", "isOnline", "online"]);
   const normalizedOnline = String(onlineValue ?? "").trim().toLowerCase();
   const explicitOnline = typeof onlineValue === "boolean"
@@ -622,11 +629,6 @@ function staffResponderFromProfile(profile) {
     : isOnline && isOnDuty
       ? "available"
       : "offline";
-  const position = isOnline && isOnDuty
-    ? livePosition || lastKnownPosition
-    : lastKnownPosition || livePosition;
-  const lat = position?.lat ?? (latitude ? Number(latitude) : NaN);
-  const lng = position?.lng ?? (longitude ? Number(longitude) : NaN);
 
   return {
     ...(previous || {}),
@@ -641,12 +643,8 @@ function staffResponderFromProfile(profile) {
     isOnDuty,
     lastSeenAt,
     location: status === "responding" && previous ? previous.location : location,
-    lat: Number.isFinite(lat) && lat >= -90 && lat <= 90
-      ? lat
-      : previous && previous.lat,
-    lng: Number.isFinite(lng) && lng >= -180 && lng <= 180
-      ? lng
-      : previous && previous.lng,
+    lat,
+    lng,
     staffUser: true,
   };
 }
