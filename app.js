@@ -503,6 +503,12 @@ function profileTimestamp(value) {
   return null;
 }
 
+function isValidCoordinate(value) {
+  if (value === null || value === undefined || value === "") return false;
+  const num = Number(value);
+  return Number.isFinite(num) && !(num === 0);
+}
+
 function staffResponderFromProfile(profile) {
   const id = `STAFF-${profile.id}`;
   const previous = state.responders.find((responder) => responder.id === id);
@@ -520,20 +526,24 @@ function staffResponderFromProfile(profile) {
     "locationName", "campusLocation", "baseLocation", "building", "location",
   ]) || (previous && previous.location) || "Location unavailable";
   
-  const lastKnownLat = profile.last_known_lat !== undefined ? Number(profile.last_known_lat) : NaN;
-  const lastKnownLng = profile.last_known_lng !== undefined ? Number(profile.last_known_lng) : NaN;
-  const responderLat = profile.responder_lat !== undefined ? Number(profile.responder_lat) : NaN;
-  const responderLng = profile.responder_lng !== undefined ? Number(profile.responder_lng) : NaN;
+  const rawLastKnownLat = profile.last_known_lat;
+  const rawLastKnownLng = profile.last_known_lng;
+  const rawResponderLat = profile.responder_lat;
+  const rawResponderLng = profile.responder_lng;
 
-  const validLastKnown = Number.isFinite(lastKnownLat) && Number.isFinite(lastKnownLng) && lastKnownLat >= -90 && lastKnownLat <= 90 && lastKnownLng >= -180 && lastKnownLng <= 180;
-  const validResponder = Number.isFinite(responderLat) && Number.isFinite(responderLng) && responderLat >= -90 && responderLat <= 90 && responderLng >= -180 && responderLng <= 180;
+  const validLastKnown = isValidCoordinate(rawLastKnownLat) && isValidCoordinate(rawLastKnownLng);
+  const validResponder = isValidCoordinate(rawResponderLat) && isValidCoordinate(rawResponderLng);
 
   if (!validLastKnown && !validResponder) {
     return null;
   }
 
-  const lat = validLastKnown ? lastKnownLat : responderLat;
-  const lng = validLastKnown ? lastKnownLng : responderLng;
+  const lat = validLastKnown ? Number(rawLastKnownLat) : Number(rawResponderLat);
+  const lng = validLastKnown ? Number(rawLastKnownLng) : Number(rawResponderLng);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180 || (lat === 0 && lng === 0)) {
+    return null;
+  }
 
   const onlineValue = profileField(profile, ["is_online", "isOnline", "online"]);
   const normalizedOnline = String(onlineValue ?? "").trim().toLowerCase();

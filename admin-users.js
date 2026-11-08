@@ -321,6 +321,134 @@ function refreshSosLocations(requests = [], alerts = []) {
     .forEach((location) => sosLocations.set(location.userId, location));
 }
 
+function timeAgoText(value) {
+  const millis = timestampMillis(value);
+  if (millis === null) return "Time unavailable";
+  const seconds = Math.floor((Date.now() - millis) / 1000);
+  if (seconds < 60) return "Just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function openStudentLocationModal(user) {
+  const profileLat = user.last_known_lat;
+  const profileLng = user.last_known_lng;
+  const profileUpdatedAt = user.location_updated_at;
+  const profileAccuracy = user.location_accuracy_m;
+
+  const hasProfileLoc = isValidCoordinate(profileLat) && isValidCoordinate(profileLng);
+  let lat, lng, updatedAt, accuracy, sourceLabel;
+
+  const fromSOS = sosLocations.get(user.id);
+  if (hasProfileLoc) {
+    lat = Number(profileLat);
+    lng = Number(profileLng);
+    updatedAt = profileUpdatedAt;
+    accuracy = profileAccuracy;
+    sourceLabel = "Profile location";
+  } else if (fromSOS) {
+    lat = fromSOS.lat;
+    lng = fromSOS.lng;
+    updatedAt = fromSOS.updatedAt;
+    accuracy = fromSOS.accuracy;
+    sourceLabel = "From last SOS";
+  } else {
+    lat = null;
+    lng = null;
+    updatedAt = null;
+    accuracy = null;
+    sourceLabel = "No location recorded yet";
+  }
+
+  const hasLocation = lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng);
+  const fullTimestamp = updatedAt !== null && updatedAt !== undefined ? new Date(timestampMillis(updatedAt) ?? updatedAt).toLocaleString() : "Time unavailable";
+  const agoText = updatedAt !== null && updatedAt !== undefined ? timeAgoText(updatedAt) : "Time unavailable";
+  const accuracyText = accuracy !== null && accuracy !== undefined && Number.isFinite(Number(accuracy)) ? `${Number(accuracy)} meters` : "Unavailable";
+
+  const modalBody = hasLocation
+    ? `<div class="space-y-4">
+        <div id="student-location-map" class="w-full h-72 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden" aria-label="Student location map"></div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div class="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
+            <span class="text-xs t-muted block">Coordinates</span>
+            <strong class="t-main">${escapeHtml(`${lat.toFixed(6)}, ${lng.toFixed(6)}`)}</strong>
+            <span class="text-xs t-muted block mt-1">Source: ${escapeHtml(sourceLabel)}</span>
+          </div>
+          <div class="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
+            <span class="text-xs t-muted block">Location Updated At</span>
+            <strong class="t-main">${escapeHtml(agoText)}</strong>
+            <span class="text-xs t-muted block mt-1">${escapeHtml(fullTimestamp)}</span>
+          </div>
+          <div class="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg sm:col-span-2">
+            <span class="text-xs t-muted block">Accuracy</span>
+            <strong class="t-main">${escapeHtml(accuracyText)}</strong>
+          </div>
+        </div>
+      </div>`
+    : `<div class="p-6 text-center space-y-2">
+        <p class="text-lg font-semibold t-main">No location recorded yet</p>
+        <p class="text-sm t-muted">This student has no recorded location in their profile or SOS history.</p>
+      </div>`;
+
+  openModal({
+    title: `Last known location: ${userName(user)}`,
+    subtitle: `${userCategory(user) === "student" ? "Student" : userCategory(user)} · ${user.email || user.id}`,
+    icon: "map-pin",
+    tone: hasLocation ? "primary" : "muted",
+    body: modalBody,
+    actions: [{ label: "Close" }],
+  });
+
+  if (hasLocation && window.mapboxgl) {
+    window.setTimeout(() => {
+      const mapEl = byId("student-location-map");
+      if (!mapEl) return;
+      const dark = document.documentElement.classList.contains("dark");
+      const FALLBACK_TOKEN = "pk.eyJ1IjoicGFvcGFvc2tpZXMiLCJhIjoiY212Z3JydHl3MDJtaDJ3cHh6azRueG1uZCJ9.3DvaMQuDVkc7FiRmkeiLOQ";
+      const token = window.mapboxgl.accessToken || window.MAPBOX_ACCESS_TOKEN || FALLBACK_TOKEN;
+      window.mapboxgl.accessToken = token;
+
+      try {
+        const studentMap = new window.mapboxgl.Map({
+          container: mapEl,
+          style: dark ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/streets-v12",
+          center: [lng, lat],
+          zoom: 16,
+        });
+
+        new window.mapboxgl.Marker({ color: "#2563eb" })
+          .setLngLat([lng, lat])
+          .setPopup(
+            new window.mapboxgl.Popup({ offset: 25 }).setHTML(
+              `<div style="font-weight:600">${escapeHtml(userName(user))}</div><div style="font-size:0.8rem;color:#666">${escapeHtml(sourceLabel)}</div>`
+            )
+          )
+          .addTo(studentMap);
+
+        const overlay = byId("modal-overlay");
+        const destroyMap = (e) => {
+          if (e.target.closest("[data-action='close-modal']") || e.target.dataset.action === "close-modal-backdrop" || (e.type === "keydown" && e.key === "Escape")) {
+            try {
+              studentMap.remove();
+            } catch (err) {}
+            overlay.removeEventListener("click", destroyMap);
+            document.removeEventListener("keydown", destroyMap);
+          }
+        };
+        overlay.addEventListener("click", destroyMap);
+        document.addEventListener("keydown", destroyMap);
+      } catch (err) {
+        console.error("Could not initialize student location map:", err);
+      }
+    }, 100);
+  }
+}
+
+
 function userName(user) {
   const direct = fieldValue(user, ["displayName", "fullName", "name", "staffName"]);
   if (direct) return direct;
@@ -500,7 +628,7 @@ function renderUsers() {
         <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(program || "—")}</td>
         <td class="t-main" data-user-details="${escapeHtml(user.id)}">${escapeHtml(specialty || "—")}${statusBadge}</td>
         <td data-user-details="${escapeHtml(user.id)}"><span class="badge ${presence.online ? "badge-ok" : "badge-muted"}" data-user-presence="${escapeHtml(user.id)}" title="${presence.lastSeen ? `Last seen ${escapeHtml(new Date(presence.lastSeen).toLocaleString())}` : "No recent presence update"}">${presence.online ? "Online" : "Offline"}</span></td>
-        <td><button class="btn btn-sm ${location ? "btn-primary" : ""}" type="button" data-user-location="${escapeHtml(user.id)}" ${location ? "" : "disabled"} aria-label="${location ? `Show last known location of ${escapeHtml(userName(user))} on live map` : `No location available for ${escapeHtml(userName(user))}`}"><i data-lucide="map-pin" class="w-4 h-4"></i> ${location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "No location"}</button></td>
+        <td><button class="btn btn-sm ${location ? "btn-primary" : ""}" type="button" data-user-location="${escapeHtml(user.id)}" ${location ? "" : "disabled"} aria-label="View last known location of ${escapeHtml(userName(user))}"><i data-lucide="map-pin" class="w-4 h-4"></i> View last known location</button></td>
         <td>
           <div class="flex items-center gap-1">
             <button class="btn btn-sm" type="button" data-user-details="${escapeHtml(user.id)}">View</button>
@@ -673,22 +801,7 @@ function initializeUsers() {
     const locationButton = event.target.closest("[data-user-location]");
     if (locationButton) {
       const user = activeUsers().find((item) => item.id === locationButton.dataset.userLocation);
-      const location = user && locationForUser(user);
-      if (!user || !location) return;
-      const presence = onlineState(user);
-      window.dispatchEvent(new CustomEvent("safepateros:show-user-location", {
-        detail: {
-          id: user.id,
-          name: userName(user),
-          lat: location.lat,
-          lng: location.lng,
-          online: presence.online,
-          onDuty: profilePresence(user).onDuty,
-          updatedAt: location.updatedAt,
-          lastSeenAt: profilePresence(user).lastSeen,
-          source: location.source,
-        },
-      }));
+      if (user) openStudentLocationModal(user);
       return;
     }
     const detailsTrigger = event.target.closest("[data-user-details]") || event.target.closest("[data-user-row]");
