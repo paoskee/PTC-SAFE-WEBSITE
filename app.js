@@ -1834,10 +1834,14 @@ function renderLiveList() {
   );
   const crew = state.responders
     .filter((r) => r.staffUser)
+    .filter((r) => r.isOnline && r.isOnDuty)
     .filter((r) => ui.mapResponderStatus === "all" || r.status === ui.mapResponderStatus)
-    .map((r) =>
-      card({ kind: "responder", item: r, title: r.name, sub: r.location, st: RESPONDER_STATUS[r.status] })
-    );
+    .map((r) => {
+      const inc = alertOf(r);
+      const doing = inc ? `Responding to ${inc.userName || inc.title || inc.id}` : "Idle";
+      const subText = `${r.role} · ${r.location} · ${doing}`;
+      return card({ kind: "responder", item: r, title: r.name, sub: subText, st: RESPONDER_STATUS[r.status] });
+    });
   const services = facilities
     .filter((f) => ui.layers[f.type] && (ui.mapFacilityFilter === "all" || f.type === ui.mapFacilityFilter))
     .map((f) =>
@@ -1859,7 +1863,7 @@ function renderLiveList() {
       : "None found within the search radius.";
 
   fill("live-box-a", incidents, "No active incidents.");
-  fill("live-box-b", crew, "No promoted responders match this filter.");
+  fill("live-box-b", crew, "No responders are online right now.");
   fill("live-box-c", services, servicesEmpty);
 }
 
