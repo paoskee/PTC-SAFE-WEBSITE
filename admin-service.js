@@ -27,10 +27,29 @@ export function isActiveAlert(record) {
 
 export function isResponder(user) {
   if (!user) return false;
-  const role = String(user.role || (user.data && user.data.role) || "").trim();
+  if (isAdminUser(user)) return false;
+  const role = String(user.role || (user.data && user.data.role) || "").trim().toLowerCase();
   const specialty = String(user.staff_specialty || user.staffSpecialty || (user.data && (user.data.staff_specialty || user.data.staffSpecialty)) || "").trim();
-  return (role.toLowerCase() === "responder" || specialty.length > 0) && specialty.length > 0;
+  return role === "responder" || specialty.length > 0;
 }
+
+export function isAdminUser(user) {
+  if (!user) return false;
+  const adminFlag = user.is_admin ?? user.isAdmin ?? (user.data && (user.data.is_admin ?? user.data.isAdmin));
+  const role = String(user.role || (user.data && user.data.role) || "").trim().toLowerCase();
+  return adminFlag === true || adminFlag === "true" || adminFlag === 1 || role === "admin";
+}
+
+export function isRegularUser(user) {
+  if (!user) return false;
+  if (isAdminUser(user) || isResponder(user)) return false;
+  const role = String(user.role || (user.data && user.data.role) || "").trim().toLowerCase();
+  if (role === "student" || role === "" || !role) return true;
+  const studentFlag = user.is_student ?? user.isStudent ?? (user.data && (user.data.is_student ?? user.data.isStudent));
+  if (studentFlag === true || studentFlag === "true" || studentFlag === 1) return true;
+  return !role || role === "student" || role === "user";
+}
+
 
 export function isResponderOnline(user) {
   if (!user || !isResponder(user)) return false;
