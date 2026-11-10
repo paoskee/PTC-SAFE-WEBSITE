@@ -547,6 +547,28 @@ function askResponderSpecialty(name) {
     document.body.appendChild(overlay);
   });
 }
+function showPromotionConfirmationModal(name, specialty, isPromotion = true) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4";
+    const titleText = isPromotion ? `Promoted to Responder` : `Removed as Responder`;
+    const bodyText = isPromotion
+      ? `${escapeHtml(name)} has been promoted from Student to Responder (${escapeHtml(specialty)}).`
+      : `${escapeHtml(name)} has been removed as a responder and returned to a Student account.`;
+    overlay.innerHTML = `<div class="card p-6 w-full max-w-sm space-y-4" role="dialog" aria-modal="true" aria-label="Promotion notice">
+      <h2 class="card-title t-main">${titleText}</h2>
+      <p class="text-sm t-muted">${bodyText}</p>
+      <div class="flex justify-end pt-2">
+        <button class="btn btn-sm btn-primary" type="button" data-ok>OK</button>
+      </div></div>`;
+    const done = () => { overlay.remove(); resolve(); };
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay || event.target.closest("[data-ok]")) done();
+    });
+    document.body.appendChild(overlay);
+  });
+}
+
 
 function isActiveUser(user) {
   if (
@@ -781,12 +803,12 @@ function initializeUsers() {
         if (!specialty) return;
         await dashboardService.promoteToResponder(userId, specialty);
         Object.assign(target, { role: "Responder", staff_specialty: specialty, staffSpecialty: specialty, is_on_duty: true, isOnDuty: true });
-        toast(`${userName(target)} is now a responder (${specialty}).`);
+        await showPromotionConfirmationModal(userName(target), specialty, true);
       } else {
         if (!window.confirm(`Remove ${userName(target)} as a responder? They will become a regular student account.`)) return;
         await dashboardService.demoteResponder(userId);
         Object.assign(target, { role: "Student", staff_specialty: null, staffSpecialty: null, is_on_duty: false, isOnDuty: false });
-        toast(`${userName(target)} is no longer a responder.`);
+        await showPromotionConfirmationModal(userName(target), "Student", false);
       }
       renderUsers();
       publishResponderProfiles(true);

@@ -1,4 +1,65 @@
 import { supabase, isAdminRow } from "./supabase-config.js";
+// Centralized Contract Helpers for SafePateros Admin App
+export function isActiveAlert(record) {
+  if (!record) return false;
+  const status = String(
+    record.status || record.alertStatus || record.alert_status || record.state || ""
+  ).trim().toLowerCase();
+  
+  const terminalStatuses = ["resolved", "cancelled", "canceled", "declined", "false_alarm", "fake_alarm", "completed", "closed", "withdrawn"];
+  if (terminalStatuses.includes(status)) return false;
+
+  if (
+    record.is_active === false ||
+    record.isActive === false ||
+    record.active === false ||
+    record.is_cancelled === true ||
+    record.is_canceled === true ||
+    record.cancelled === true ||
+    record.canceled === true
+  ) {
+    return false;
+  }
+
+  const activeStatuses = ["pending", "active", "accepted", "assigned", "dispatched", "responding", "en_route", "in_progress", "unassigned"];
+  return activeStatuses.includes(status) || !status;
+}
+
+export function isResponder(user) {
+  if (!user) return false;
+  const role = String(user.role || (user.data && user.data.role) || "").trim();
+  const specialty = String(user.staff_specialty || user.staffSpecialty || (user.data && (user.data.staff_specialty || user.data.staffSpecialty)) || "").trim();
+  return (role.toLowerCase() === "responder" || specialty.length > 0) && specialty.length > 0;
+}
+
+export function isResponderOnline(user) {
+  if (!user || !isResponder(user)) return false;
+  const onlineFlag = user.is_online ?? user.isOnline ?? (user.data && (user.data.is_online ?? user.data.isOnline));
+  if (onlineFlag !== true && onlineFlag !== "true" && onlineFlag !== 1) return false;
+
+  const lastSeen = user.last_seen_at || user.lastSeenAt || user.location_updated_at || user.locationUpdatedAt || (user.data && (user.data.last_seen_at || user.data.lastSeenAt || user.data.location_updated_at || user.data.locationUpdatedAt));
+  if (!lastSeen) return true;
+
+  const timeMs = new Date(lastSeen).getTime();
+  if (isNaN(timeMs)) return true;
+  return (Date.now() - timeMs) <= 120000;
+}
+
+export function isResponderOnDuty(user) {
+  if (!user || !isResponder(user)) return false;
+  const duty = user.is_on_duty ?? user.isOnDuty ?? (user.data && (user.data.is_on_duty ?? user.data.isOnDuty));
+  return duty === true || duty === "true" || duty === 1;
+}
+
+export function isResponderBusy(user, activeAlertsList = []) {
+  if (!user) return false;
+  const userId = String(user.id || user.user_id || "");
+  return activeAlertsList.some((alert) => {
+    const assignedId = String(alert.responderId || alert.assigned_responder_id || alert.responder_id || "");
+    return assignedId && assignedId === userId && isActiveAlert(alert);
+  });
+}
+
 
 const ALERT_COLUMNS =
   "id,user_id,user_name,user_phone,emergency_type,latitude,longitude,status,created_at";
@@ -46,7 +107,8 @@ const FLAT_TO_CAMEL = {
 };
 
 function documents(rows = []) {
-  return rows.map((row) => {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter((row) => row && typeof row === "object" && (row.id !== undefined || row.user_id !== undefined || row.userId !== undefined)).map((row) => {
     const { data, ...columns } = row;
     const nonNullColumns = Object.fromEntries(
       Object.entries(columns).filter(([, value]) => value !== null)
@@ -812,9 +874,42 @@ export async function refreshDashboardData() {
 export async function promoteToResponder(userId, specialty) {
   const clean = String(specialty || "").trim();
   if (!userId || !clean) throw new Error("Choose a specialty for the responder.");
-  const { data, error } = await client()
+  const db = client();
+  
+  // Read current user data to merge promotion_notice safely per CONTRACT
+  const { data: existingUser, error: fetchError } = await db
     .from("users")
-    .update({ role: "Responder", staff_specialty: clean, is_on_duty: true })
+    .select("data, role, staff_specialty")
+    .eq("id", userId)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+
+  const currentData = existingUser && typeof existingUser.data === "object" && existingUser.data !== null ? existingUser.data : {};
+  const prevRole = existingUser && existingUser.role ? existingUser.role : "Student";
+  const now = new Date().toISOString();
+  const promotionNotice = {
+    type: "promoted",
+    from: prevRole,
+    to: "Responder",
+    specialty: clean,
+    at: now,
+    seen: false,
+  };
+
+  const updatedData = {
+    ...currentData,
+    promotion_notice: promotionNotice,
+    promotionNotice,
+  };
+
+  const { data, error } = await db
+    .from("users")
+    .update({
+      role: "Responder",
+      staff_specialty: clean,
+      is_on_duty: true,
+      data: updatedData,
+    })
     .eq("id", userId)
     .select("id")
     .maybeSingle();
@@ -825,9 +920,43 @@ export async function promoteToResponder(userId, specialty) {
 
 export async function demoteResponder(userId) {
   if (!userId) throw new Error("Missing user id.");
-  const { data, error } = await client()
+  const db = client();
+
+  const { data: existingUser, error: fetchError } = await db
     .from("users")
-    .update({ role: "Student", staff_specialty: null, is_on_duty: false, is_online: false })
+    .select("data, role, staff_specialty")
+    .eq("id", userId)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+
+  const currentData = existingUser && typeof existingUser.data === "object" && existingUser.data !== null ? existingUser.data : {};
+  const prevRole = existingUser && existingUser.role ? existingUser.role : "Responder";
+  const prevSpecialty = existingUser && existingUser.staff_specialty ? existingUser.staff_specialty : "General";
+  const now = new Date().toISOString();
+  const demotionNotice = {
+    type: "demoted",
+    from: prevRole,
+    to: "Student",
+    specialty: prevSpecialty,
+    at: now,
+    seen: false,
+  };
+
+  const updatedData = {
+    ...currentData,
+    promotion_notice: demotionNotice,
+    promotionNotice: demotionNotice,
+  };
+
+  const { data, error } = await db
+    .from("users")
+    .update({
+      role: "Student",
+      staff_specialty: null,
+      is_on_duty: false,
+      is_online: false,
+      data: updatedData,
+    })
     .eq("id", userId)
     .select("id")
     .maybeSingle();
